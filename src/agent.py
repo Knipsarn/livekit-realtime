@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import aiohttp
+import yaml
 from datetime import datetime
 from livekit import agents, api
 from livekit.agents import JobContext, WorkerOptions, cli, get_job_context
@@ -17,6 +18,36 @@ load_dotenv(".env.local")
 load_dotenv()
 
 logger = logging.getLogger("voice-agent")
+
+
+def load_agent_config():
+    """Load agent configuration from samuel-agent.md"""
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs", "agents", "samuel-agent.md")
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+
+        # Parse the YAML content
+        if content.startswith('title:'):
+            # Look for the tools section to find end of main config
+            tools_start = content.find('\ntools:')
+            if tools_start != -1:
+                yaml_content = content[:tools_start]
+            else:
+                yaml_content = content
+
+            config = yaml.safe_load(yaml_content)
+            logger.info(f"Loaded agent configuration from {config_path}")
+            logger.info(f"Config keys: {list(config.keys()) if config else 'None'}")
+            return config
+
+    except Exception as e:
+        logger.warning(f"Could not load agent config from {config_path}: {e}")
+        return {}
+
+# Load agent configuration
+AGENT_CONFIG = load_agent_config()
 
 
 class ConversationTracker:
@@ -39,13 +70,15 @@ class ConversationTracker:
 
 class VoiceAssistant(Agent):
     def __init__(self, tools=None):
-        # Load system prompt from environment with Swedish fallback
-        system_prompt = os.getenv("AGENT_SYSTEM_PROMPT",
-            "Du är en hjälpsam röstassistent som ALLTID svarar på svenska. "
-            "Var konversationell och vänlig. Håll svaren korta och naturliga för talade konversationer. "
-            "Du pratar med någon över telefon, så var tydlig och engagerande. "
-            "Svara ALLTID på svenska, oavsett vilket språk användaren pratar."
-        )
+        # Load system prompt from samuel-agent.md or use environment variable as fallback
+        system_prompt = os.getenv("AGENT_SYSTEM_PROMPT")
+        if not system_prompt and AGENT_CONFIG.get("prompt"):
+            system_prompt = AGENT_CONFIG["prompt"]
+
+        # Default fallback if neither file nor env has prompt
+        if not system_prompt:
+            system_prompt = "Du är en hjälpsam telefonassistent som tar meddelanden."
+
         super().__init__(instructions=system_prompt, tools=tools or [])
         self.session_ref = None
         self.ctx_ref = None
@@ -61,7 +94,7 @@ class VoiceAssistant(Agent):
             if self.session_ref:
                 logger.info("Generating farewell message...")
                 speech_handle = await self.session_ref.generate_reply(
-                    instructions="Säg adjö på svenska: 'Tack för samtalet! Ha en bra dag. Vi hörs!' och avsluta samtalet."
+                    instructions="Säg hejdå på svenska och avsluta samtalet vänligt."
                 )
 
                 # CRITICAL: Wait for speech to complete with timeout
@@ -103,8 +136,58 @@ class VoiceAssistant(Agent):
 
 
 @function_tool
+async def calendar_booking(date_time: str, caller_name: str, phone: str, email: str = None, notes: str = None):
+    """Boka en tid för att Samuel ska ringa upp eller för ett kort möte"""
+    ctx = get_job_context()
+    if ctx is None:
+        return "Kunde inte boka tid - ingen kontext tillgänglig"
+
+    # Log the booking details (in production, this would integrate with a real calendar system)
+    booking_data = {
+        "type": "calendar_booking",
+        "date_time": date_time,
+        "caller_name": caller_name,
+        "phone": phone,
+        "email": email,
+        "notes": notes,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    logger.info(f"Calendar booking created: {booking_data}")
+
+    # In production: integrate with Google Calendar, Outlook, or other calendar API
+    # For now, we'll log it and it will be sent via webhook
+
+    return "Toppen, jag har bokat tiden. Samuel återkommer enligt bokningen."
+
+
+@function_tool
+async def log_note(caller_name: str, phone: str, summary: str, urgency: str = "normal", type: str = "privat", email: str = None):
+    """Spara sammanfattning av samtal för Samuel"""
+    ctx = get_job_context()
+    if ctx is None:
+        return "Kunde inte spara anteckning - ingen kontext tillgänglig"
+
+    # Log the note details
+    note_data = {
+        "type": "log_note",
+        "caller_name": caller_name,
+        "phone": phone,
+        "email": email,
+        "summary": summary,
+        "urgency": urgency,
+        "call_type": type,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    logger.info(f"Note logged: {note_data}")
+
+    return "Anteckningen har sparats."
+
+
+@function_tool
 async def end_call():
-    """Called when the user wants to end the call or when the conversation naturally concludes"""
+    """Avsluta samtalet när konversationen är klar"""
     ctx = get_job_context()
     if ctx is None:
         return "Could not end call - no context available"
@@ -113,7 +196,7 @@ async def end_call():
     await ctx.api.room.delete_room(
         api.DeleteRoomRequest(room=ctx.room.name)
     )
-    return "Call ended successfully"
+    return "Samtalet avslutas."
 
 
 async def send_webhook(tracker: ConversationTracker):
@@ -157,8 +240,12 @@ async def entrypoint(ctx: JobContext):
 
     logger.info(f"Starting call tracking for room: {tracker.call_id}")
 
-    # Get configuration from environment
-    voice_name = os.getenv("VOICE_NAME", "marin")
+    # Get configuration from samuel-agent.md or environment
+    voice_name = os.getenv("VOICE_NAME")
+    if not voice_name and AGENT_CONFIG.get("voice"):
+        voice_name = AGENT_CONFIG["voice"]
+    if not voice_name:
+        voice_name = "cedar"  # Default fallback
 
     # Create AgentSession with GPT-Realtime (2025 model) and Swedish configuration
     session = AgentSession(
@@ -169,8 +256,7 @@ async def entrypoint(ctx: JobContext):
             temperature=0.7,
             input_audio_transcription=InputAudioTranscription(
                 model="whisper-1",
-                language="sv",  # Swedish language
-                prompt="Svenska konversation med AI-assistent Elsa"
+                language="sv"  # Swedish language
             )
         )
     )
@@ -199,7 +285,7 @@ async def entrypoint(ctx: JobContext):
     ctx.add_shutdown_callback(send_completion_webhook)
 
     # Create agent and set session references for call ending
-    agent = VoiceAssistant(tools=[end_call])
+    agent = VoiceAssistant(tools=[calendar_booking, log_note, end_call])
     agent.set_session_refs(session, ctx)
 
     # Start the session with the agent and function tools
@@ -208,10 +294,15 @@ async def entrypoint(ctx: JobContext):
         agent=agent
     )
 
-    # Send automatic Swedish greeting
-    greeting_message = os.getenv("AGENT_GREETING_MESSAGE", "Hej och välkommen! Jag är Elsa, din AI-assistent. Vad kan jag hjälpa dig med idag?")
+    # Send greeting from samuel-agent.md or environment
+    greeting_message = os.getenv("AGENT_GREETING_MESSAGE")
+    if not greeting_message and AGENT_CONFIG.get("first_message"):
+        greeting_message = AGENT_CONFIG["first_message"]
+    if not greeting_message:
+        greeting_message = "Hej, du har nått Samuel. Jag är Jim, hans assistent. Han kan inte svara just nu, men jag hjälper gärna till att ta ett meddelande. Vem pratar jag med?"
+
     await session.generate_reply(
-        instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
+        instructions=f"Säg hälsningen: '{greeting_message}'"
     )
 
 
