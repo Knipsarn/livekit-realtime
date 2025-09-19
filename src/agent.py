@@ -4,8 +4,9 @@ import os
 import time
 import aiohttp
 import yaml
+import wave
 from datetime import datetime
-from livekit import agents, api
+from livekit import agents, api, rtc
 from livekit.agents import JobContext, WorkerOptions, cli, get_job_context
 from livekit.agents.voice import AgentSession, Agent
 from livekit.agents import ConversationItemAddedEvent, UserInputTranscribedEvent, function_tool
@@ -38,6 +39,8 @@ def load_agent_config():
                 yaml_content = content
 
             config = yaml.safe_load(yaml_content)
+            print(f"YAML CONTENT: {yaml_content[:200]}...")
+            print(f"PARSED CONFIG: {config}")
             logger.info(f"Loaded agent configuration from {config_path}")
             logger.info(f"Config keys: {list(config.keys()) if config else 'None'}")
             return config
@@ -46,8 +49,8 @@ def load_agent_config():
         logger.warning(f"Could not load agent config from {config_path}: {e}")
         return {}
 
-# Load agent configuration
-AGENT_CONFIG = load_agent_config()
+# Load agent configuration (will be reloaded in entrypoint)
+AGENT_CONFIG = {}
 
 
 class ConversationTracker:
@@ -199,6 +202,64 @@ async def end_call():
     return "Samtalet avslutas."
 
 
+async def play_greeting_audio(ctx: JobContext):
+    """Play pre-recorded greeting audio file and ensure it's recorded by Telnyx"""
+    try:
+        # Look for greeting audio file
+        audio_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "greeting.wav")
+
+        if not os.path.exists(audio_path):
+            logger.warning(f"Greeting audio file not found at {audio_path}, falling back to AI voice")
+            return False
+
+        logger.info(f"Playing pre-recorded greeting from: {audio_path}")
+
+        # Create audio source and track with proper sample rate for telephony
+        audio_source = rtc.AudioSource(sample_rate=24000, num_channels=1)
+        track = rtc.LocalAudioTrack.create_audio_track("greeting", audio_source)
+
+        # Publish the track to room - this ensures Telnyx recording captures it
+        publication = await ctx.room.local_participant.publish_track(track, rtc.TrackPublishOptions(
+            name="greeting_audio"
+        ))
+
+        # Read and play the audio file
+        with wave.open(audio_path, 'rb') as wav_file:
+            sample_rate = wav_file.getframerate()
+            num_channels = wav_file.getnchannels()
+            frames = wav_file.readframes(wav_file.getnframes())
+
+            # Calculate duration for proper timing
+            duration = len(frames) / (sample_rate * num_channels * 2)  # 2 bytes per sample for 16-bit
+            logger.info(f"Greeting audio duration: {duration:.2f} seconds")
+
+            # Convert to AudioFrame with proper format
+            audio_frame = rtc.AudioFrame(
+                data=frames,
+                sample_rate=sample_rate,
+                num_channels=num_channels,
+                samples_per_channel=len(frames) // (num_channels * 2)
+            )
+
+            # Send the audio frame to the room
+            await audio_source.capture_frame(audio_frame)
+
+            # Wait for audio to finish playing with extra buffer for network/processing
+            await asyncio.sleep(duration + 0.5)
+
+        # Keep track published briefly to ensure recording system captures it
+        await asyncio.sleep(0.3)
+
+        # Unpublish the track
+        await ctx.room.local_participant.unpublish_track(publication.sid)
+        logger.info(f"Greeting audio playback completed and track unpublished")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to play greeting audio: {e}")
+        return False
+
+
 async def send_webhook(tracker: ConversationTracker):
     """Send conversation data to webhook after call completion"""
     webhook_url = os.getenv("WEBHOOK_URL")
@@ -234,6 +295,10 @@ async def entrypoint(ctx: JobContext):
     """Main entrypoint for the voice agent."""
     await ctx.connect()
 
+    # Reload configuration for each call
+    global AGENT_CONFIG
+    AGENT_CONFIG = load_agent_config()
+
     # Initialize conversation tracking
     tracker = ConversationTracker()
     tracker.call_id = ctx.room.name
@@ -254,10 +319,10 @@ async def entrypoint(ctx: JobContext):
             voice=voice_name,
             modalities=["audio", "text"],
             temperature=0.7,
-            input_audio_transcription=InputAudioTranscription(
-                model="whisper-1",
-                language="sv"  # Swedish language
-            )
+            # Remove transcription config to avoid API errors
+            # input_audio_transcription=InputAudioTranscription(
+            #     model="whisper-1"
+            # )
         )
     )
 
@@ -296,14 +361,29 @@ async def entrypoint(ctx: JobContext):
 
     # Send greeting from samuel-agent.md or environment
     greeting_message = os.getenv("AGENT_GREETING_MESSAGE")
+    print(f"ENV GREETING: {greeting_message}")
+    print(f"CONFIG FIRST_MESSAGE: {AGENT_CONFIG.get('first_message')}")
+
     if not greeting_message and AGENT_CONFIG.get("first_message"):
         greeting_message = AGENT_CONFIG["first_message"]
     if not greeting_message:
         greeting_message = "Hej, du har nått Samuel. Jag är Jim, hans assistent. Han kan inte svara just nu, men jag hjälper gärna till att ta ett meddelande. Vem pratar jag med?"
 
-    await session.generate_reply(
-        instructions=f"Säg hälsningen: '{greeting_message}'"
-    )
+    print(f"FINAL GREETING: '{greeting_message}'")
+    print(f"GREETING LENGTH: {len(greeting_message)}")
+    print(f"GREETING REPR: {repr(greeting_message)}")
+
+    instruction = f"Säg exakt denna hälsning: '{greeting_message}'"
+    print(f"FULL INSTRUCTION: {instruction}")
+    logger.info(f"Using greeting: {greeting_message[:100]}...")
+
+    # Try to play recorded greeting audio file, fallback to AI voice
+    audio_played = await play_greeting_audio(ctx)
+
+    if not audio_played:
+        # Fallback to AI voice greeting
+        await asyncio.sleep(0.8)  # Small delay for audio pipeline
+        await session.generate_reply(instructions=instruction)
 
 
 if __name__ == "__main__":
