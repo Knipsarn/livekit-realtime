@@ -342,8 +342,8 @@ if __name__ == "__main__":
         self._generate_pyproject_file(variables)
 
     def _generate_env_file(self, variables: Dict[str, str]):
-        """Generate .env.example file"""
-        env_content = f'''# LiveKit Configuration
+        """Generate .env.example file with only essential deployment keys"""
+        env_content = '''# LiveKit Configuration
 LIVEKIT_URL=wss://your-project.livekit.cloud
 LIVEKIT_API_KEY=your_livekit_api_key
 LIVEKIT_API_SECRET=your_livekit_api_secret
@@ -351,18 +351,8 @@ LIVEKIT_API_SECRET=your_livekit_api_secret
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key
 
-# Agent Configuration
-AGENT_NAME={variables.get("AGENT_NAME", "Assistant")}
-VOICE_NAME={variables.get("VOICE", "cedar")}
-LANGUAGE={variables.get("LANGUAGE", "English")}
-
-# Voice Activity Detection
-VAD_THRESHOLD=0.6
-VAD_PREFIX_MS=200
-VAD_SILENCE_MS=700
-
-# Webhook Configuration
-{"WEBHOOK_URL=" + variables.get("WEBHOOK_URL", "") if variables.get("WEBHOOK_ENABLED") == "true" else "# WEBHOOK_URL=https://your-webhook-url.com"}
+# Note: All agent configuration is loaded from config/{agent_name}.md
+# Only essential deployment keys should be in this .env file
 '''
 
         env_path = self.output_dir / ".env.example"

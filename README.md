@@ -66,7 +66,7 @@ python scripts/create_agent.py --output-dir my-agent
 
 ### 2. **Configure Your Agent**
 
-Edit the generated `config/agent.creation.md` file or use the interactive wizard:
+All agent configuration is done in the `config/agent.creation.md` file (not environment variables). Use the interactive wizard or edit directly:
 
 ```yaml
 # Essential Configuration
@@ -84,7 +84,8 @@ use_case: "customer_support"
 ```bash
 cd my-agent
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with ONLY your API keys (LiveKit + OpenAI)
+# All agent config is in config/{agent_name}.md
 pip install -e .
 python agent.py dev
 ```
