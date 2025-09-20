@@ -46,6 +46,7 @@ logs/
 examples/*/
 demo-agent/
 *-agent/
+!robert-agent/
 !template/
 
 # OS

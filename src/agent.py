@@ -1,22 +1,25 @@
+"""
+Robert's Conversational Workflow - Simplified working version
+Based on samuel-dev working pattern
+"""
+
 import asyncio
 import logging
 import os
 import time
-import aiohttp
 from datetime import datetime
 from livekit import agents, api
 from livekit.agents import JobContext, WorkerOptions, cli, get_job_context
 from livekit.agents.voice import AgentSession, Agent
-from livekit.agents import ConversationItemAddedEvent, UserInputTranscribedEvent, function_tool
+from livekit.agents import ConversationItemAddedEvent, UserInputTranscribedEvent
 from livekit.plugins import openai
 from openai.types.beta.realtime.session import InputAudioTranscription
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv(".env.local")
 load_dotenv()
 
-logger = logging.getLogger("voice-agent")
+logger = logging.getLogger("robert-workflow")
 
 
 class ConversationTracker:
@@ -37,16 +40,48 @@ class ConversationTracker:
         return time.time() - self.start_time
 
 
-class VoiceAssistant(Agent):
-    def __init__(self, tools=None):
-        # Load system prompt from environment with Swedish fallback
-        system_prompt = os.getenv("AGENT_SYSTEM_PROMPT",
-            "Du är en hjälpsam röstassistent som ALLTID svarar på svenska. "
-            "Var konversationell och vänlig. Håll svaren korta och naturliga för talade konversationer. "
-            "Du pratar med någon över telefon, så var tydlig och engagerande. "
-            "Svara ALLTID på svenska, oavsett vilket språk användaren pratar."
-        )
-        super().__init__(instructions=system_prompt, tools=tools or [])
+class RobertAgent(Agent):
+    def __init__(self):
+        # Robert's Swedish system prompt with natural conversation rules
+        system_prompt = """Du är Robert's professionella telefonassistent som svarar på vidarebefordrade samtal.
+
+GRUNDPRINCIPER:
+- Ställ EN fråga i taget - aldrig flera frågor samtidigt
+- Korta, tydliga meningar (max ~15 ord per fråga)
+- Lugn, professionell, samtalslik ton
+- Använd fyllnadsord ibland ("okej," "hm," "jag förstår") för naturlighet
+- Upprepa alltid namn, nummer och e-post för att bekräfta riktighet
+- Ställ alltid följdfrågor på ett vägledande sätt, inte skriptad upprepning
+
+SAMTALSFLÖDE:
+1. HÄLSNING: Erkänn vem du är (digital assistent)
+2. IDENTIFIERA OCH KATEGORISERA: Lyssna och klassificera ärendet
+   - Om vagt: ställ en förtydligande fråga
+   - Om tydligt: ställ en kort följdfråga inom kategorin
+3. SAMLA KONTAKTUPPGIFTER:
+   - Få alltid namn
+   - Bekräfta telefon: "Vill du bli kontaktad på ett annat nummer än detta?"
+   - Fråga efter e-post vid behov: "Vilken e-post vill du använda?"
+   - Upprepa detaljer: "Jag uppfattade: [namn], [telefon], [mejl]. Stämmer det?"
+4. ESKALERING/NÄSTA STEG:
+   - Enkel fråga som du kan svara på → svara direkt
+   - Kräver djupare rådgivning → föreslå möte
+   - Annars → försäkra: "Jag ser till att en kollega kontaktar dig så fort som möjligt"
+5. AVSLUTNING:
+   - Sammanfatta kort: "[ärendet], [kontaktinfo]"
+   - Avsluta artigt: "Tack, en medarbetare återkommer så fort de kan"
+
+SKYDDSRÄCKEN:
+- Ge aldrig priser, juridiska villkor eller löften
+- Upprepa aldrig samma sak i olika meningar
+- Hantera avbrott smidigt: stoppa, erkänn, fortsätt naturligt
+- Om ljud otydligt: fråga en gång om upprepning, fortsätt sedan med det som förstås
+- Tystnad >8s: be om nummer och avsluta
+- Om utanför räckvidd: "Jag kan inte svara på det just nu, men jag vidarebefordrar ärendet"
+
+Svara ALLTID på svenska och följ "en fråga i taget" principen."""
+
+        super().__init__(instructions=system_prompt)
         self.session_ref = None
         self.ctx_ref = None
 
@@ -55,122 +90,28 @@ class VoiceAssistant(Agent):
         self.session_ref = session
         self.ctx_ref = ctx
 
-    async def end_call_gracefully(self):
-        """Programmatically end the call with proper cleanup for telephony"""
-        try:
-            if self.session_ref:
-                logger.info("Generating farewell message...")
-                speech_handle = await self.session_ref.generate_reply(
-                    instructions="Säg adjö på svenska: 'Tack för samtalet! Ha en bra dag. Vi hörs!' och avsluta samtalet."
-                )
-
-                # CRITICAL: Wait for speech to complete with timeout
-                await asyncio.wait_for(speech_handle.wait(), timeout=10.0)
-                logger.info("Farewell message completed")
-
-                # Small delay to ensure audio transmission completes
-                await asyncio.sleep(1.0)
-
-            # Delete room for complete call termination (required for telephony)
-            ctx = get_job_context()
-            if ctx:
-                logger.info(f"Deleting room: {ctx.room.name}")
-                await ctx.api.room.delete_room(
-                    api.DeleteRoomRequest(room=ctx.room.name)
-                )
-                logger.info("Room deleted successfully - call terminated")
-            else:
-                logger.warning("No job context available for room deletion")
-
-        except asyncio.TimeoutError:
-            logger.warning("Farewell message timed out, force terminating")
-            ctx = get_job_context()
-            if ctx:
-                await ctx.api.room.delete_room(
-                    api.DeleteRoomRequest(room=ctx.room.name)
-                )
-        except Exception as e:
-            logger.error(f"Error during call termination: {e}")
-            # Ensure call still ends even with errors
-            try:
-                ctx = get_job_context()
-                if ctx:
-                    await ctx.api.room.delete_room(
-                        api.DeleteRoomRequest(room=ctx.room.name)
-                    )
-            except Exception as cleanup_error:
-                logger.error(f"Failed to cleanup call: {cleanup_error}")
-
-
-@function_tool
-async def end_call():
-    """Called when the user wants to end the call or when the conversation naturally concludes"""
-    ctx = get_job_context()
-    if ctx is None:
-        return "Could not end call - no context available"
-
-    logger.info("Function tool called to end call")
-    await ctx.api.room.delete_room(
-        api.DeleteRoomRequest(room=ctx.room.name)
-    )
-    return "Call ended successfully"
-
-
-async def send_webhook(tracker: ConversationTracker):
-    """Send conversation data to webhook after call completion"""
-    webhook_url = os.getenv("WEBHOOK_URL")
-    if not webhook_url:
-        logger.info("No webhook URL configured, skipping webhook")
-        return
-
-    payload = {
-        "call_id": tracker.call_id,
-        "conversation": tracker.conversation_data,
-        "duration_seconds": tracker.get_duration(),
-        "timestamp": int(time.time()),
-        "start_time": tracker.start_time,
-        "end_time": time.time()
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                webhook_url,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status == 200:
-                    logger.info("Webhook sent successfully")
-                else:
-                    logger.error(f"Webhook failed: {response.status}")
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-
 
 async def entrypoint(ctx: JobContext):
-    """Main entrypoint for the voice agent."""
+    """Main entrypoint for Robert's conversational agent - simplified working version"""
     await ctx.connect()
 
     # Initialize conversation tracking
     tracker = ConversationTracker()
     tracker.call_id = ctx.room.name
 
-    logger.info(f"Starting call tracking for room: {tracker.call_id}")
+    logger.info(f"Starting Robert's call for room: {tracker.call_id}")
 
-    # Get configuration from environment
-    voice_name = os.getenv("VOICE_NAME", "marin")
-
-    # Create AgentSession with GPT-Realtime (2025 model) and Swedish configuration
+    # Create AgentSession with GPT-Realtime and Swedish configuration
     session = AgentSession(
         llm=openai.realtime.RealtimeModel(
-            model="gpt-realtime",  # Correct 2025 GPT-Realtime model
-            voice=voice_name,
+            model="gpt-realtime",  # 2025 GPT-Realtime model
+            voice="cedar",  # Professional warm voice
             modalities=["audio", "text"],
             temperature=0.7,
             input_audio_transcription=InputAudioTranscription(
                 model="whisper-1",
                 language="sv",  # Swedish language
-                prompt="Svenska konversation med AI-assistent Elsa"
+                prompt="Naturlig svensk konversation med professionell telefonassistent Robert"
             )
         )
     )
@@ -189,29 +130,21 @@ async def entrypoint(ctx: JobContext):
     def on_user_input_transcribed(event: UserInputTranscribedEvent):
         if event.is_final:
             logger.info(f"Final user transcript: {event.transcript}")
-            # Remove automatic word detection - let agent decide via function tools
 
-    # Register webhook as shutdown callback
-    async def send_completion_webhook():
-        logger.info("Sending completion webhook...")
-        await send_webhook(tracker)
-
-    ctx.add_shutdown_callback(send_completion_webhook)
-
-    # Create agent and set session references for call ending
-    agent = VoiceAssistant(tools=[end_call])
+    # Create Robert agent
+    agent = RobertAgent()
     agent.set_session_refs(session, ctx)
 
-    # Start the session with the agent and function tools
+    # Start the session with the agent
     await session.start(
         room=ctx.room,
         agent=agent
     )
 
-    # Send automatic Swedish greeting
-    greeting_message = os.getenv("AGENT_GREETING_MESSAGE", "Hej och välkommen! Jag är Elsa, din AI-assistent. Vad kan jag hjälpa dig med idag?")
+    # Send automatic Swedish greeting following Robert's conversation rules
+    greeting = "Hej, tack för att du ringde. Jag är företagets assistent. Hur kan jag hjälpa dig idag?"
     await session.generate_reply(
-        instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
+        instructions=f"Säg hälsningen på svenska: '{greeting}' och vänta på svar."
     )
 
 
