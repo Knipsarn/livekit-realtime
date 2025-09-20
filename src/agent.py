@@ -1,25 +1,22 @@
-"""
-Robert's Conversational Workflow - Simplified working version
-Based on samuel-dev working pattern
-"""
-
 import asyncio
 import logging
 import os
 import time
+import aiohttp
 from datetime import datetime
 from livekit import agents, api
 from livekit.agents import JobContext, WorkerOptions, cli, get_job_context
 from livekit.agents.voice import AgentSession, Agent
-from livekit.agents import ConversationItemAddedEvent, UserInputTranscribedEvent
+from livekit.agents import ConversationItemAddedEvent, UserInputTranscribedEvent, function_tool
 from livekit.plugins import openai
 from openai.types.beta.realtime.session import InputAudioTranscription
 from dotenv import load_dotenv
 
 # Load environment variables
+load_dotenv(".env.local")
 load_dotenv()
 
-logger = logging.getLogger("robert-workflow")
+logger = logging.getLogger("voice-agent")
 
 
 class ConversationTracker:
@@ -40,9 +37,9 @@ class ConversationTracker:
         return time.time() - self.start_time
 
 
-class RobertAgent(Agent):
-    def __init__(self):
-        # Robert's Swedish system prompt with natural conversation rules
+class VoiceAssistant(Agent):
+    def __init__(self, tools=None):
+        # Robert's Swedish system prompt
         system_prompt = """Du är Robert's professionella telefonassistent som svarar på vidarebefordrade samtal.
 
 GRUNDPRINCIPER:
@@ -51,37 +48,17 @@ GRUNDPRINCIPER:
 - Lugn, professionell, samtalslik ton
 - Använd fyllnadsord ibland ("okej," "hm," "jag förstår") för naturlighet
 - Upprepa alltid namn, nummer och e-post för att bekräfta riktighet
-- Ställ alltid följdfrågor på ett vägledande sätt, inte skriptad upprepning
 
 SAMTALSFLÖDE:
 1. HÄLSNING: Erkänn vem du är (digital assistent)
 2. IDENTIFIERA OCH KATEGORISERA: Lyssna och klassificera ärendet
-   - Om vagt: ställ en förtydligande fråga
-   - Om tydligt: ställ en kort följdfråga inom kategorin
-3. SAMLA KONTAKTUPPGIFTER:
-   - Få alltid namn
-   - Bekräfta telefon: "Vill du bli kontaktad på ett annat nummer än detta?"
-   - Fråga efter e-post vid behov: "Vilken e-post vill du använda?"
-   - Upprepa detaljer: "Jag uppfattade: [namn], [telefon], [mejl]. Stämmer det?"
-4. ESKALERING/NÄSTA STEG:
-   - Enkel fråga som du kan svara på → svara direkt
-   - Kräver djupare rådgivning → föreslå möte
-   - Annars → försäkra: "Jag ser till att en kollega kontaktar dig så fort som möjligt"
-5. AVSLUTNING:
-   - Sammanfatta kort: "[ärendet], [kontaktinfo]"
-   - Avsluta artigt: "Tack, en medarbetare återkommer så fort de kan"
-
-SKYDDSRÄCKEN:
-- Ge aldrig priser, juridiska villkor eller löften
-- Upprepa aldrig samma sak i olika meningar
-- Hantera avbrott smidigt: stoppa, erkänn, fortsätt naturligt
-- Om ljud otydligt: fråga en gång om upprepning, fortsätt sedan med det som förstås
-- Tystnad >8s: be om nummer och avsluta
-- Om utanför räckvidd: "Jag kan inte svara på det just nu, men jag vidarebefordrar ärendet"
+3. SAMLA KONTAKTUPPGIFTER: Få namn och bekräfta telefon
+4. ESKALERING: Föreslå att en kollega kontaktar dem
+5. AVSLUTNING: Sammanfatta och avsluta artigt
 
 Svara ALLTID på svenska och följ "en fråga i taget" principen."""
 
-        super().__init__(instructions=system_prompt)
+        super().__init__(instructions=system_prompt, tools=tools or [])
         self.session_ref = None
         self.ctx_ref = None
 
@@ -91,27 +68,75 @@ Svara ALLTID på svenska och följ "en fråga i taget" principen."""
         self.ctx_ref = ctx
 
 
+@function_tool
+async def end_call():
+    """Called when the user wants to end the call or when the conversation naturally concludes"""
+    ctx = get_job_context()
+    if ctx is None:
+        return "Could not end call - no context available"
+
+    logger.info("Function tool called to end call")
+    await ctx.api.room.delete_room(
+        api.DeleteRoomRequest(room=ctx.room.name)
+    )
+    return "Call ended successfully"
+
+
+async def send_webhook(tracker: ConversationTracker):
+    """Send conversation data to webhook after call completion"""
+    webhook_url = os.getenv("WEBHOOK_URL")
+    if not webhook_url:
+        logger.info("No webhook URL configured, skipping webhook")
+        return
+
+    payload = {
+        "call_id": tracker.call_id,
+        "conversation": tracker.conversation_data,
+        "duration_seconds": tracker.get_duration(),
+        "timestamp": int(time.time()),
+        "start_time": tracker.start_time,
+        "end_time": time.time()
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                webhook_url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                if response.status == 200:
+                    logger.info("Webhook sent successfully")
+                else:
+                    logger.error(f"Webhook failed: {response.status}")
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+
+
 async def entrypoint(ctx: JobContext):
-    """Main entrypoint for Robert's conversational agent - simplified working version"""
+    """Main entrypoint for the voice agent."""
     await ctx.connect()
 
     # Initialize conversation tracking
     tracker = ConversationTracker()
     tracker.call_id = ctx.room.name
 
-    logger.info(f"Starting Robert's call for room: {tracker.call_id}")
+    logger.info(f"Starting call tracking for room: {tracker.call_id}")
 
-    # Create AgentSession with GPT-Realtime and Swedish configuration
+    # Get configuration from environment
+    voice_name = os.getenv("VOICE_NAME", "cedar")
+
+    # Create AgentSession with GPT-Realtime (2025 model) and Swedish configuration
     session = AgentSession(
         llm=openai.realtime.RealtimeModel(
-            model="gpt-realtime",  # 2025 GPT-Realtime model
-            voice="cedar",  # Professional warm voice
+            model="gpt-realtime",  # Correct 2025 GPT-Realtime model
+            voice=voice_name,
             modalities=["audio", "text"],
             temperature=0.7,
             input_audio_transcription=InputAudioTranscription(
                 model="whisper-1",
                 language="sv",  # Swedish language
-                prompt="Naturlig svensk konversation med professionell telefonassistent Robert"
+                prompt="Svenska konversation med AI-assistent"
             )
         )
     )
@@ -131,20 +156,27 @@ async def entrypoint(ctx: JobContext):
         if event.is_final:
             logger.info(f"Final user transcript: {event.transcript}")
 
-    # Create Robert agent
-    agent = RobertAgent()
+    # Register webhook as shutdown callback
+    async def send_completion_webhook():
+        logger.info("Sending completion webhook...")
+        await send_webhook(tracker)
+
+    ctx.add_shutdown_callback(send_completion_webhook)
+
+    # Create agent and set session references for call ending
+    agent = VoiceAssistant(tools=[end_call])
     agent.set_session_refs(session, ctx)
 
-    # Start the session with the agent
+    # Start the session with the agent and function tools
     await session.start(
         room=ctx.room,
         agent=agent
     )
 
-    # Send automatic Swedish greeting following Robert's conversation rules
-    greeting = "Hej, tack för att du ringde. Jag är företagets assistent. Hur kan jag hjälpa dig idag?"
+    # Send automatic Swedish greeting
+    greeting_message = "Hej, tack för att du ringde. Jag är företagets assistent. Hur kan jag hjälpa dig idag?"
     await session.generate_reply(
-        instructions=f"Säg hälsningen på svenska: '{greeting}' och vänta på svar."
+        instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
     )
 
 
