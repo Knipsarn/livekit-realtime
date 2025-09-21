@@ -58,13 +58,16 @@ class ConversationTracker:
 
 class VoiceAssistant(Agent):
     def __init__(self, tools=None):
-        # Load system prompt from environment with Swedish fallback
-        system_prompt = os.getenv("AGENT_SYSTEM_PROMPT",
-            "Du är en hjälpsam röstassistent som ALLTID svarar på svenska. "
-            "Var konversationell och vänlig. Håll svaren korta och naturliga för talade konversationer. "
-            "Du pratar med någon över telefon, så var tydlig och engagerande. "
-            "Svara ALLTID på svenska, oavsett vilket språk användaren pratar."
-        )
+        # Swedish Nils AI system prompt
+        system_prompt = """Du är Nils AI, hans röstassistent. Mål: Ditt huvudsakliga mål är att förstå varför en person har ringt till Nils så att du kan meddela honom efter samtalet. Du har även möjlighet att föreslå nästa steg till personen på ett vänligt, naturligt sätt, men detta gör du enbart om det behövs. Tala kort och tydligt.
+
+1) Identitet Roll: Svensk röstassistent för Nils telefon, tar emot samtal från både privat personer, existerande kunder och intressenter för Nils produkt. Persona: Varm, professionell, tålmodig. Initiativ men aldrig påträngande.
+
+2) Ton & Stil Ton: lugn, serviceinriktad, förtroendeingivande. Stil: vardagligt språk, korta meningar, ställer aldrig mer än en fråga per gång. Mikrofraser: "aa", "förstår", "fint", "Adå"
+
+3) Samtalsprinciper. Spegla kort: "Så jag förstår att ...". Erbjud mjuka val före detaljfrågor med personen i fokus "om du vill så kan jag boka en tid för Nils att ringa upp?"
+
+4) Avslutsmall Kvittens → nästa steg → artigt hej."""
         super().__init__(instructions=system_prompt, tools=tools or [])
         self.session_ref = None
         self.ctx_ref = None
@@ -217,21 +220,6 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(send_completion_webhook)
 
-    # Event-driven greeting: trigger when participant joins (optimal latency)
-    @ctx.room.on("participant_connected")
-    def on_participant_connected(participant):
-        logger.info(f"🎯 Participant joined: {participant.identity} - triggering immediate Swedish greeting")
-
-        # Trigger immediate Swedish greeting using gpt-realtime
-        async def deliver_greeting():
-            greeting_message = os.getenv("AGENT_GREETING_MESSAGE", "Hej och välkommen! Jag är Elsa, din AI-assistent. Vad kan jag hjälpa dig med idag?")
-            await session.generate_reply(
-                instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
-            )
-            logger.info("✅ Swedish greeting delivered immediately")
-
-        # Schedule greeting delivery
-        asyncio.create_task(deliver_greeting())
 
     # Create agent and set session references for call ending
     agent = VoiceAssistant(tools=[end_call])
@@ -246,10 +234,10 @@ async def entrypoint(ctx: JobContext):
     # ⚠️ CORE FUNCTIONALITY: Swedish greeting delivery - DO NOT MODIFY ⚠️
     # Official LiveKit 2025 phone assistant pattern for gpt-realtime model
     # Tested working: Immediate Swedish greeting without cutoff
-    greeting_message = os.getenv("AGENT_GREETING_MESSAGE", "Hej och välkommen! Jag är Elsa, din AI-assistent. Vad kan jag hjälpa dig med idag?")
-    asyncio.create_task(session.generate_reply(
+    greeting_message = "Hej jag är Nils AI, han är upptagen men jag skickar ett meddelande efter samtalet. Vad fan vill du?"
+    await session.generate_reply(
         instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
-    ))
+    )
 
 
 if __name__ == "__main__":
