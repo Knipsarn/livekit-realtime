@@ -198,6 +198,22 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(send_completion_webhook)
 
+    # Event-driven greeting: trigger when participant joins (optimal latency)
+    @ctx.room.on("participant_connected")
+    def on_participant_connected(participant):
+        logger.info(f"🎯 Participant joined: {participant.identity} - triggering immediate Swedish greeting")
+
+        # Trigger immediate Swedish greeting using gpt-realtime
+        async def deliver_greeting():
+            greeting_message = os.getenv("AGENT_GREETING_MESSAGE", "Hej och välkommen! Jag är Elsa, din AI-assistent. Vad kan jag hjälpa dig med idag?")
+            await session.generate_reply(
+                instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
+            )
+            logger.info("✅ Swedish greeting delivered immediately")
+
+        # Schedule greeting delivery
+        asyncio.create_task(deliver_greeting())
+
     # Create agent and set session references for call ending
     agent = VoiceAssistant(tools=[end_call])
     agent.set_session_refs(session, ctx)
@@ -208,11 +224,7 @@ async def entrypoint(ctx: JobContext):
         agent=agent
     )
 
-    # Send automatic Swedish greeting
-    greeting_message = os.getenv("AGENT_GREETING_MESSAGE", "Hej och välkommen! Jag är Elsa, din AI-assistent. Vad kan jag hjälpa dig med idag?")
-    await session.generate_reply(
-        instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
-    )
+    # Greeting now handled by participant_connected event (optimal latency)
 
 
 if __name__ == "__main__":
