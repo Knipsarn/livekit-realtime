@@ -224,7 +224,11 @@ async def entrypoint(ctx: JobContext):
         agent=agent
     )
 
-    # Greeting now handled by participant_connected event (optimal latency)
+    # Immediate greeting using LiveKit 2025 pattern for gpt-realtime (official phone assistant pattern)
+    greeting_message = os.getenv("AGENT_GREETING_MESSAGE", "Hej och välkommen! Jag är Elsa, din AI-assistent. Vad kan jag hjälpa dig med idag?")
+    asyncio.create_task(session.generate_reply(
+        instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
+    ))
 
 
 if __name__ == "__main__":
