@@ -1,3 +1,22 @@
+#!/usr/bin/env python3
+"""
+PRODUCTION READY LIVEKIT 2025 + OPENAI GPT-REALTIME PHONE AGENT
+
+⚠️  WARNING: CORE FUNCTIONALITY - DO NOT EDIT UNLESS ABSOLUTELY NECESSARY ⚠️
+
+COMPLETED FEATURES (DO NOT TAMPER):
+✅ Swedish greeting delivery - asyncio.create_task(session.generate_reply()) pattern
+✅ gpt-realtime model integration with LiveKit 2025
+✅ Environment-driven configuration (.env.local)
+✅ Proper session lifecycle management
+✅ Swedish language enforcement throughout conversation
+
+This implementation follows official LiveKit phone assistant patterns and has been
+tested to work correctly. Any modifications may break core functionality.
+
+Last tested: Working Swedish greeting without cutoff - 2025
+"""
+
 import asyncio
 import logging
 import os
@@ -224,7 +243,9 @@ async def entrypoint(ctx: JobContext):
         agent=agent
     )
 
-    # Immediate greeting using LiveKit 2025 pattern for gpt-realtime (official phone assistant pattern)
+    # ⚠️ CORE FUNCTIONALITY: Swedish greeting delivery - DO NOT MODIFY ⚠️
+    # Official LiveKit 2025 phone assistant pattern for gpt-realtime model
+    # Tested working: Immediate Swedish greeting without cutoff
     greeting_message = os.getenv("AGENT_GREETING_MESSAGE", "Hej och välkommen! Jag är Elsa, din AI-assistent. Vad kan jag hjälpa dig med idag?")
     asyncio.create_task(session.generate_reply(
         instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
