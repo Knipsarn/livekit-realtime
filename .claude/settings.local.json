@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:docs.livekit.io)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:support.telnyx.com)",
+      "WebFetch(domain:telnyx.com)",
+      "WebFetch(domain:github.com)",
+      "Read(//c/Users/Admin/AppData/Roaming/Python/Python312/site-packages/livekit/agents/voice/**)",
+      "Bash(python:*)",
+      "Bash(cp:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

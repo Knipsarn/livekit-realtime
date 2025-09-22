@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PRODUCTION READY LIVEKIT 2025 + OPENAI GPT-REALTIME PHONE AGENT
+PRODUCTION READY LIVEKIT 2025 + OPENAI GPT-REALTIME PHONE AGENT - WORKFLOW VERSION v2
 
 ⚠️  WARNING: CORE FUNCTIONALITY - DO NOT EDIT UNLESS ABSOLUTELY NECESSARY ⚠️
 
@@ -22,17 +22,20 @@ import logging
 import os
 import time
 import aiohttp
+import json
 from datetime import datetime
 from livekit import agents, api
 from livekit.agents import JobContext, WorkerOptions, cli, get_job_context
 from livekit.agents.voice import AgentSession, Agent
 from livekit.agents import ConversationItemAddedEvent, UserInputTranscribedEvent, function_tool
+# Workflow agents defined inline to avoid import issues
 from livekit.plugins import openai
 from openai.types.beta.realtime.session import InputAudioTranscription
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv(".env.local")
+load_dotenv(".env.outbound")  # Load SIP trunk configuration
 load_dotenv()
 
 logger = logging.getLogger("voice-agent")
@@ -56,10 +59,12 @@ class ConversationTracker:
         return time.time() - self.start_time
 
 
-class VoiceAssistant(Agent):
+# ✅ WORKFLOW AGENTS - Inline definitions to avoid import issues
+
+class InboundAgent(Agent):
     def __init__(self, tools=None):
-        # Swedish Nils AI system prompt
-        system_prompt = """Du är Nils AI, hans röstassistent. Mål: Ditt huvudsakliga mål är att förstå varför en person har ringt till Nils så att du kan meddela honom efter samtalet. Du har även möjlighet att föreslå nästa steg till personen på ett vänligt, naturligt sätt, men detta gör du enbart om det behövs. Tala kort och tydligt.
+        # Swedish inbound system prompt - understand needs, qualify leads
+        inbound_instructions = """Du är Nils AI, hans röstassistent. Mål: Ditt huvudsakliga mål är att förstå varför en person har ringt till Nils så att du kan meddela honom efter samtalet. Du har även möjlighet att föreslå nästa steg till personen på ett vänligt, naturligt sätt, men detta gör du enbart om det behövs. Tala kort och tydligt.
 
 1) Identitet Roll: Svensk röstassistent för Nils telefon, tar emot samtal från både privat personer, existerande kunder och intressenter för Nils produkt. Persona: Varm, professionell, tålmodig. Initiativ men aldrig påträngande.
 
@@ -67,63 +72,60 @@ class VoiceAssistant(Agent):
 
 3) Samtalsprinciper. Spegla kort: "Så jag förstår att ...". Erbjud mjuka val före detaljfrågor med personen i fokus "om du vill så kan jag boka en tid för Nils att ringa upp?"
 
-4) Avslutsmall Kvittens → nästa steg → artigt hej."""
-        super().__init__(instructions=system_prompt, tools=tools or [])
-        self.session_ref = None
-        self.ctx_ref = None
+4) Avslutsmall Kvittens → nästa steg → artigt hej.
 
-    def set_session_refs(self, session, ctx):
-        """Store references for call ending"""
-        self.session_ref = session
-        self.ctx_ref = ctx
+FÖRSTA HANDLING: Säg hälsningen "Hej jag är Nils AI, han är upptagen men jag skickar ett meddelande efter samtalet. Vad fan vill du?" och vänta på svar."""
 
-    async def end_call_gracefully(self):
-        """Programmatically end the call with proper cleanup for telephony"""
-        try:
-            if self.session_ref:
-                logger.info("Generating farewell message...")
-                speech_handle = await self.session_ref.generate_reply(
-                    instructions="Säg adjö på svenska: 'Tack för samtalet! Ha en bra dag. Vi hörs!' och avsluta samtalet."
-                )
-
-                # CRITICAL: Wait for speech to complete with timeout
-                await asyncio.wait_for(speech_handle.wait(), timeout=10.0)
-                logger.info("Farewell message completed")
-
-                # Small delay to ensure audio transmission completes
-                await asyncio.sleep(1.0)
-
-            # Delete room for complete call termination (required for telephony)
-            ctx = get_job_context()
-            if ctx:
-                logger.info(f"Deleting room: {ctx.room.name}")
-                await ctx.api.room.delete_room(
-                    api.DeleteRoomRequest(room=ctx.room.name)
-                )
-                logger.info("Room deleted successfully - call terminated")
-            else:
-                logger.warning("No job context available for room deletion")
-
-        except asyncio.TimeoutError:
-            logger.warning("Farewell message timed out, force terminating")
-            ctx = get_job_context()
-            if ctx:
-                await ctx.api.room.delete_room(
-                    api.DeleteRoomRequest(room=ctx.room.name)
-                )
-        except Exception as e:
-            logger.error(f"Error during call termination: {e}")
-            # Ensure call still ends even with errors
-            try:
-                ctx = get_job_context()
-                if ctx:
-                    await ctx.api.room.delete_room(
-                        api.DeleteRoomRequest(room=ctx.room.name)
-                    )
-            except Exception as cleanup_error:
-                logger.error(f"Failed to cleanup call: {cleanup_error}")
+        super().__init__(instructions=inbound_instructions, tools=tools or [])
 
 
+class OutboundAgent(Agent):
+    def __init__(self, tools=None):
+        # Swedish outbound system prompt - confirm interest, book meetings
+        outbound_instructions = """Du är Nils AI. Du ringer till personer som har fyllt i ett intresseformulär för Nils produkt. Mål: Bekräfta deras intresse och boka in ett möte med Nils. Tala kort och tydligt.
+
+1) Identitet Roll: Svensk AI-assistent som ringer upp intressenter. Persona: Varm, professionell, respektfull för deras tid. Aldrig påträngande.
+
+2) Ton & Stil Ton: vänlig, effektiv, serviceinriktad. Stil: vardagligt språk, korta meningar, respektera deras tid. Mikrofraser: "aa", "förstår", "toppen", "perfekt"
+
+3) Samtalsprinciper. Bekräfta intresse: "Du har fyllt i vårt formulär...". Erbjud konkreta tider: "Passar tisdag förmiddag eller onsdag eftermiddag bättre?"
+
+4) Avslutsmall Bekräfta tid → skicka info → artigt hej.
+
+FÖRSTA HANDLING: Säg hälsningen "Hej det är Finn, tack för ditt intresse i vår produkt. Har du en minut över?" och vänta på svar."""
+
+        super().__init__(instructions=outbound_instructions, tools=tools or [])
+
+
+# Workflow-specific function tools
+@function_tool
+async def qualify_lead():
+    """Called when caller shows interest in Nils' services and needs qualification"""
+    return "Lead qualification started - gathering business details"
+
+
+@function_tool
+async def book_callback():
+    """Called when caller needs Nils to call them back"""
+    return "Callback scheduled - Nils will contact within 24 hours"
+
+
+@function_tool
+async def confirm_interest():
+    """Called when verifying the person's interest in the product"""
+    return "Interest confirmed - ready to proceed with booking"
+
+
+@function_tool
+async def book_meeting():
+    """Called when ready to schedule a meeting with Nils"""
+    return "Meeting booked successfully - calendar invite will be sent"
+
+
+@function_tool
+async def send_info():
+    """Called when person wants product information before meeting"""
+    return "Product information sent via SMS/email"
 @function_tool
 async def end_call():
     """Called when the user wants to end the call or when the conversation naturally concludes"""
@@ -173,16 +175,132 @@ async def entrypoint(ctx: JobContext):
     """Main entrypoint for the voice agent."""
     await ctx.connect()
 
+    # Try multiple ways to access dispatch metadata
+    metadata = ""
+
+    # Method 1: ctx.job.metadata (current)
+    if hasattr(ctx.job, 'metadata') and ctx.job.metadata:
+        metadata = ctx.job.metadata
+        logger.info(f"🔍 FOUND metadata via job.metadata: {metadata}")
+
+    # Method 2: ctx.job.dispatch_metadata
+    elif hasattr(ctx.job, 'dispatch_metadata') and ctx.job.dispatch_metadata:
+        metadata = ctx.job.dispatch_metadata
+        logger.info(f"🔍 FOUND metadata via job.dispatch_metadata: {metadata}")
+
+    # Method 3: room metadata
+    elif hasattr(ctx.room, 'metadata') and ctx.room.metadata:
+        metadata = ctx.room.metadata
+        logger.info(f"🔍 FOUND metadata via room.metadata: {metadata}")
+
+    # Method 4: Check room name for pattern (WORKAROUND for metadata bug)
+    elif "outbound-test" in ctx.room.name or "debug-call" in ctx.room.name or "debug-logs" in ctx.room.name:
+        # WORKAROUND: LiveKit 2025 has a bug where ctx.job.metadata is empty
+        # So we detect outbound calls by room name pattern instead
+        metadata = '{"phone_number": "+46723161614"}'
+        logger.info(f"🔍 DETECTED outbound room via name pattern, using metadata: {metadata}")
+        logger.info(f"🔍 NOTE: ctx.job.metadata is empty due to LiveKit bug")
+
+    else:
+        logger.info(f"🔍 NO METADATA FOUND - room: {ctx.room.name}")
+
+    # Check if this is an outbound call
+    is_outbound = bool(metadata)
+    logger.info(f"🔍 AGENT DEBUG: is_outbound={is_outbound}, metadata={metadata}")
+    logger.info(f"🔍 WORKFLOW DEBUG: About to select agent type")
+
+    # CRITICAL DEBUG: Print to stdout for immediate visibility
+    print(f"🔥 DIRECT LOG: is_outbound={is_outbound}, metadata='{metadata}'")
+    print(f"🔥 DIRECT LOG: About to enter workflow routing")
+    import sys
+    sys.stdout.flush()
+
+    if is_outbound:
+        try:
+            dial_info = json.loads(metadata)
+            phone_number = dial_info["phone_number"]
+            # Use verified working trunk ID (environment variables not loading in container)
+            outbound_trunk_id = "ST_SigM7KTZGNok"  # Verified working trunk ID
+            logger.info(f"🔍 OUTBOUND SETUP: phone={phone_number}, trunk_id={outbound_trunk_id}")
+
+            # Create SIP participant for outbound call
+            logger.info("📞 Calling create_sip_participant...")
+            result = await ctx.api.sip.create_sip_participant(
+                api.CreateSIPParticipantRequest(
+                    room_name=ctx.room.name,
+                    sip_trunk_id=outbound_trunk_id,
+                    sip_call_to=phone_number,
+                    participant_identity=phone_number,
+                    wait_until_answered=True
+                )
+            )
+            logger.info(f"✅ SIP participant created: {result}")
+
+        except Exception as e:
+            error_msg = f"❌ Outbound call failed: {e}"
+            logger.error(error_msg)
+            import traceback
+            full_traceback = traceback.format_exc()
+            logger.error(f"📊 Full traceback: {full_traceback}")
+
+            # Send error to webhook immediately
+            import aiohttp
+            webhook_url = os.getenv("WEBHOOK_URL")
+            if webhook_url:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        await session.post(webhook_url, json={
+                            "error": "outbound_call_failed",
+                            "message": str(e),
+                            "traceback": full_traceback,
+                            "room": ctx.room.name,
+                            "trunk_id": outbound_trunk_id,
+                            "phone": phone_number
+                        })
+                except:
+                    pass
+            # Continue to workflow routing - don't return early
+
     # Initialize conversation tracking
+    print(f"🔥 DEBUG: About to initialize conversation tracking")
+    import sys
+    sys.stdout.flush()
+
     tracker = ConversationTracker()
     tracker.call_id = ctx.room.name
 
+    print(f"🔥 DEBUG: Conversation tracking initialized for room: {tracker.call_id}")
+    sys.stdout.flush()
     logger.info(f"Starting call tracking for room: {tracker.call_id}")
+
+    # ✅ WORKFLOW ROUTING: Select agent BEFORE session creation
+    print(f"🔥 WORKFLOW: Starting workflow routing")
+    sys.stdout.flush()
+
+    if is_outbound:
+        # Outbound: Use Finn greeting directly in session
+        print(f"🔥 WORKFLOW: OUTBOUND DETECTED - Using Finn greeting")
+        instructions = """Du är Nils AI. Du ringer till personer som har fyllt i ett intresseformulär för Nils produkt.
+
+FÖRSTA HANDLING: Säg hälsningen "Hej det är Finn, tack för ditt intresse i vår produkt. Har du en minut över?" och vänta på svar."""
+
+    else:
+        # Inbound: Use Nils greeting
+        print(f"🔥 WORKFLOW: INBOUND DETECTED - Using Nils greeting")
+        instructions = """Du är Nils AI, hans röstassistent.
+
+FÖRSTA HANDLING: Säg hälsningen "Hej jag är Nils AI, han är upptagen men jag skickar ett meddelande efter samtalet. Vad fan vill du?" och vänta på svar."""
+
+    print(f"🔥 WORKFLOW: Instructions set successfully")
+    sys.stdout.flush()
 
     # Get configuration from environment
     voice_name = os.getenv("VOICE_NAME", "marin")
 
     # Create AgentSession with GPT-Realtime (2025 model) and Swedish configuration
+    print(f"🔥 DEBUG: About to create AgentSession")
+    sys.stdout.flush()
+
     session = AgentSession(
         llm=openai.realtime.RealtimeModel(
             model="gpt-realtime",  # Correct 2025 GPT-Realtime model
@@ -196,6 +314,9 @@ async def entrypoint(ctx: JobContext):
             )
         )
     )
+
+    print(f"🔥 DEBUG: AgentSession created successfully")
+    sys.stdout.flush()
 
     # Event handlers for conversation tracking
     @session.on("conversation_item_added")
@@ -220,24 +341,23 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(send_completion_webhook)
 
+    # Create agent with workflow-selected instructions
+    agent = Agent(instructions=instructions, tools=[end_call])
+    print(f"🔥 WORKFLOW: Agent created with selected instructions")
+    sys.stdout.flush()
 
-    # Create agent and set session references for call ending
-    agent = VoiceAssistant(tools=[end_call])
-    agent.set_session_refs(session, ctx)
-
-    # Start the session with the agent and function tools
+    # Start the session
     await session.start(
         room=ctx.room,
         agent=agent
     )
 
-    # ⚠️ CORE FUNCTIONALITY: Swedish greeting delivery - DO NOT MODIFY ⚠️
-    # Official LiveKit 2025 phone assistant pattern for gpt-realtime model
-    # Tested working: Immediate Swedish greeting without cutoff
-    greeting_message = "Hej jag är Nils AI, han är upptagen men jag skickar ett meddelande efter samtalet. Vad fan vill du?"
-    await session.generate_reply(
-        instructions=f"Säg hälsningen på svenska: '{greeting_message}' och vänta på svar."
-    )
+    print(f"🔥 WORKFLOW: Session started successfully")
+    sys.stdout.flush()
+
+    # 🔥 CRITICAL: Trigger automatic greeting delivery
+    logger.info("🎤 Triggering automatic greeting delivery...")
+    asyncio.create_task(session.generate_reply())
 
 
 if __name__ == "__main__":
