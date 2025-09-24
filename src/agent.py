@@ -306,13 +306,18 @@ FÖRSTA HANDLING: Säg hälsningen "Hej jag är Nils AI, han är upptagen men ja
             model="gpt-realtime",  # Correct 2025 GPT-Realtime model
             voice=voice_name,
             modalities=["audio", "text"],
-            temperature=0.7,
+            temperature=0.6,  # Slightly reduced for consistency
+            # 🔧 AUDIO QUALITY OPTIMIZATION: Use default turn detection for stability
             input_audio_transcription=InputAudioTranscription(
                 model="whisper-1",
                 language="sv",  # Swedish language
-                prompt="Svenska konversation med AI-assistent Elsa"
+                prompt="Svenska röstsamtal med naturliga avbrott och interjektioner som 'aa', 'förstår', 'okej'"
             )
-        )
+        ),
+        # 🔧 SESSION OPTIMIZATION: Minimal changes - only fix cutoffs
+        min_endpointing_delay=0.5,  # Conservative increase from 0.25s
+        allow_interruptions=True,   # Keep interruptions enabled for natural flow
+        min_interruption_duration=0.6  # Slight increase to reduce false interruptions
     )
 
     print(f"🔥 DEBUG: AgentSession created successfully")
@@ -357,7 +362,17 @@ FÖRSTA HANDLING: Säg hälsningen "Hej jag är Nils AI, han är upptagen men ja
 
     # 🔥 CRITICAL: Trigger automatic greeting delivery
     logger.info("🎤 Triggering automatic greeting delivery...")
-    asyncio.create_task(session.generate_reply())
+
+    # Schedule greeting delivery without blocking
+    async def deliver_greeting():
+        await asyncio.sleep(0.5)  # Small delay to ensure session is ready
+        try:
+            await session.generate_reply()
+            logger.info("✅ Greeting delivered successfully")
+        except Exception as e:
+            logger.error(f"❌ Greeting delivery failed: {e}")
+
+    asyncio.create_task(deliver_greeting())
 
 
 if __name__ == "__main__":
