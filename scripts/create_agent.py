@@ -304,7 +304,7 @@ from src.workflows.main_workflow import entrypoint
 
 logger = logging.getLogger("{variables.get('AGENT_NAME', 'agent').lower()}")
 
-if __name__ == "__main__":
+# Entry point removed - script generator only
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
@@ -468,11 +468,11 @@ Next Steps:
 2. cp .env.example .env
 3. Edit .env with your API keys
 4. pip install -e .
-5. python agent.py dev
+5. lk agent deploy
 
 Your {variables.get('AGENT_NAME', 'agent')} is ready to use!
 """)
 
 
-if __name__ == "__main__":
+# Entry point removed - script generator only
     main()

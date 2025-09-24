@@ -1,0 +1,182 @@
+# 🤖 LiveKit Voice Agent Template Configuration
+# This file contains all configurable variables for creating voice agents
+# Replace {{VARIABLE}} placeholders with your specific values
+
+# === AGENT IDENTITY ===
+agent:
+  name: "{{AGENT_NAME}}"                        # e.g., "Assistant", "CustomerService"
+  owner: "{{OWNER_NAME}}"                       # e.g., "Acme Corp", "John Doe"
+  language: "{{LANGUAGE}}"                      # e.g., "English", "Svenska", "Español"
+  voice: "{{VOICE}}"                            # Options: cedar, nova, marin, alloy
+  personality_traits: "{{PERSONALITY_TRAITS}}"  # e.g., "calm, professional, friendly"
+
+# === CONVERSATION SETTINGS ===
+conversation:
+  first_message: "{{FIRST_MESSAGE}}"
+  conversation_style: "{{CONVERSATION_STYLE}}"  # Options: formal, casual, consultative, medical, legal
+  response_length: "{{RESPONSE_LENGTH}}"        # Options: short, medium, detailed
+  use_prerecorded_greeting: {{USE_PRERECORDED}} # true/false
+
+# === WORKFLOW CONFIGURATION ===
+workflow:
+  type: "{{WORKFLOW_TYPE}}"                     # Options: single_agent, multi_agent, task_based, hybrid
+  enable_handoffs: {{ENABLE_HANDOFFS}}          # true/false
+  max_handoffs: {{MAX_HANDOFFS}}                # Number (e.g., 3)
+  context_preservation: {{CONTEXT_PRESERVATION}} # true/false
+
+# === SAFETY FEATURES ===
+safety:
+  enabled: {{SAFETY_ENABLED}}                   # true/false
+  max_call_duration: {{MAX_DURATION}}           # seconds (e.g., 600 for 10 minutes)
+  inactivity_timeout: {{INACTIVITY_TIMEOUT}}    # seconds (e.g., 30)
+  participant_disconnect_detection: {{DISCONNECT_DETECTION}} # true/false
+
+# === MEMORY SYSTEM ===
+memory:
+  enabled: {{MEMORY_ENABLED}}                   # true/false
+  track_caller_info: {{TRACK_CALLER_INFO}}      # true/false
+  auto_extract_phone: {{AUTO_EXTRACT_PHONE}}    # true/false (extract from SIP)
+  persist_conversation: {{PERSIST_CONVERSATION}} # true/false
+
+  # Fields to track
+  tracked_fields:
+    - name
+    - phone
+    - email
+    - purpose
+    - urgency
+    - custom_fields: ["{{CUSTOM_FIELDS}}"]
+
+# === TASKS ===
+tasks:
+  consent_collection:
+    enabled: {{CONSENT_ENABLED}}                # true/false
+    required: {{CONSENT_REQUIRED}}              # true/false
+    message: "{{CONSENT_MESSAGE}}"
+
+  information_gathering:
+    enabled: {{INFO_ENABLED}}                   # true/false
+    required_fields: ["{{REQUIRED_FIELDS}}"]    # e.g., ["name", "phone"]
+    optional_fields: ["{{OPTIONAL_FIELDS}}"]    # e.g., ["email", "company"]
+    validation_strict: {{VALIDATION_STRICT}}    # true/false
+
+  appointment_scheduling:
+    enabled: {{SCHEDULING_ENABLED}}             # true/false
+    auto_suggest_times: {{AUTO_SUGGEST}}        # true/false
+    buffer_minutes: {{BUFFER_MINUTES}}          # minutes between appointments
+
+# === SPECIALIST AGENTS (for multi-agent workflows) ===
+agents:
+  primary:
+    name: "{{PRIMARY_AGENT_NAME}}"
+    personality: "{{PRIMARY_PERSONALITY}}"
+    specialization: "{{PRIMARY_SPECIALIZATION}}"
+    voice: "{{PRIMARY_VOICE}}"
+
+  specialists:
+    - name: "{{SPECIALIST_1_NAME}}"
+      personality: "{{SPECIALIST_1_PERSONALITY}}"
+      specialization: "{{SPECIALIST_1_SPEC}}"
+      trigger_keywords: ["{{SPECIALIST_1_KEYWORDS}}"]
+      enabled: {{SPECIALIST_1_ENABLED}}
+
+    - name: "{{SPECIALIST_2_NAME}}"
+      personality: "{{SPECIALIST_2_PERSONALITY}}"
+      specialization: "{{SPECIALIST_2_SPEC}}"
+      trigger_keywords: ["{{SPECIALIST_2_KEYWORDS}}"]
+      enabled: {{SPECIALIST_2_ENABLED}}
+
+# === INTEGRATIONS ===
+integrations:
+  webhook:
+    enabled: {{WEBHOOK_ENABLED}}                # true/false
+    url: "{{WEBHOOK_URL}}"
+    events: ["{{WEBHOOK_EVENTS}}"]              # e.g., ["call_start", "call_end", "data_collected"]
+    auth_header: "{{WEBHOOK_AUTH}}"
+
+  telephony:
+    enabled: {{TELEPHONY_ENABLED}}              # true/false
+    provider: "{{TELEPHONY_PROVIDER}}"          # Options: telnyx, twilio, livekit
+    transcription: {{TRANSCRIPTION_ENABLED}}    # true/false
+    recording: {{RECORDING_ENABLED}}            # true/false
+
+  calendar:
+    enabled: {{CALENDAR_ENABLED}}               # true/false
+    provider: "{{CALENDAR_PROVIDER}}"           # Options: google, outlook, caldav
+    timezone: "{{TIMEZONE}}"                    # e.g., "America/New_York"
+
+  crm:
+    enabled: {{CRM_ENABLED}}                    # true/false
+    provider: "{{CRM_PROVIDER}}"                # Options: salesforce, hubspot, pipedrive
+    auto_create_contacts: {{AUTO_CREATE}}       # true/false
+
+  email:
+    enabled: {{EMAIL_ENABLED}}                  # true/false
+    provider: "{{EMAIL_PROVIDER}}"              # Options: smtp, sendgrid, mailgun
+    auto_send_summaries: {{AUTO_SUMMARIES}}     # true/false
+
+# === MODEL SETTINGS ===
+model:
+  provider: "{{MODEL_PROVIDER}}"                # Options: openai, anthropic
+  name: "{{MODEL_NAME}}"                       # e.g., "gpt-realtime", "claude-3"
+  temperature: {{TEMPERATURE}}                  # 0.1 to 1.0
+  max_tokens: {{MAX_TOKENS}}                   # Maximum response tokens
+
+  # Voice settings
+  voice_settings:
+    vad_threshold: {{VAD_THRESHOLD}}            # Voice activity detection (0.1-1.0)
+    vad_prefix_ms: {{VAD_PREFIX}}               # ms before speech
+    vad_silence_ms: {{VAD_SILENCE}}             # silence timeout ms
+
+# === PROMPT CONFIGURATION ===
+prompt:
+  template: "{{PROMPT_TEMPLATE}}"               # Options: conversational, formal, technical, custom
+  use_case: "{{USE_CASE}}"                     # Options: missed_calls, support, sales, scheduling
+  industry: "{{INDUSTRY}}"                      # Options: healthcare, finance, retail, tech, general
+
+  # Custom prompt (used if template is "custom")
+  custom_prompt: |
+    {{CUSTOM_PROMPT}}
+
+  # Behavioral rules
+  rules:
+    allow_interruptions: {{ALLOW_INTERRUPTIONS}} # true/false
+    ask_one_question: {{ONE_QUESTION}}          # true/false
+    confirm_information: {{CONFIRM_INFO}}       # true/false
+    use_fillers: {{USE_FILLERS}}               # true/false (e.g., "um", "okay")
+
+# === BUSINESS CONTEXT ===
+business:
+  type: "{{BUSINESS_TYPE}}"                     # Options: personal, consulting, retail, healthcare
+  hours: "{{BUSINESS_HOURS}}"                  # e.g., "9AM-5PM EST"
+  after_hours_message: "{{AFTER_HOURS_MSG}}"
+
+# === ADVANCED SETTINGS ===
+advanced:
+  performance:
+    response_timeout: {{RESPONSE_TIMEOUT}}      # seconds
+    retry_attempts: {{RETRY_ATTEMPTS}}          # number of retries
+    enable_caching: {{ENABLE_CACHING}}          # true/false
+
+  security:
+    enable_consent_tracking: {{CONSENT_TRACK}}  # true/false
+    data_retention_days: {{DATA_RETENTION}}     # days to retain data
+    pii_detection: {{PII_DETECTION}}            # true/false
+    compliance_mode: "{{COMPLIANCE}}"           # Options: none, gdpr, hipaa, sox
+
+  monitoring:
+    enable_analytics: {{ENABLE_ANALYTICS}}      # true/false
+    log_level: "{{LOG_LEVEL}}"                 # Options: debug, info, warning, error
+    send_metrics: {{SEND_METRICS}}              # true/false
+
+# === DEPLOYMENT ===
+deployment:
+  environment: "{{ENVIRONMENT}}"                # Options: development, staging, production
+  region: "{{REGION}}"                        # e.g., "us-east-1", "eu-west-1"
+  scaling: "{{SCALING}}"                       # Options: manual, auto, serverless
+
+# === TESTING ===
+testing:
+  enable_test_mode: {{TEST_MODE}}              # true/false
+  test_phone_numbers: ["{{TEST_NUMBERS}}"]     # Test phone numbers
+  mock_integrations: {{MOCK_INTEGRATIONS}}     # true/false

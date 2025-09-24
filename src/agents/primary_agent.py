@@ -22,7 +22,7 @@ class PrimaryAgent(BaseAgent):
         # Add primary agent specific tools
         primary_tools = [
             self.collect_caller_info,
-            self.assess_call_purpose,
+            self.categorize_call,
             self.provide_general_info,
         ]
         if tools:
@@ -32,6 +32,11 @@ class PrimaryAgent(BaseAgent):
 
     def _build_instructions(self) -> str:
         """Build instructions specific to primary agent role"""
+        # Check if we have a custom prompt from config
+        if hasattr(self, 'custom_prompt') and self.custom_prompt:
+            return self.custom_prompt
+
+        # Fallback to default instructions
         base_personality = self.config.personality
         language = self.config.language
 
@@ -157,7 +162,7 @@ Always maintain a {base_personality} tone throughout the conversation.
         return f"Thank you {name}, I have your information recorded."
 
     @function_tool
-    async def assess_call_purpose(self, purpose: str, urgency: str = "normal"):
+    async def categorize_call(self, purpose: str, urgency: str = "normal"):
         """Assess and categorize the call purpose"""
         if self.session_ref and hasattr(self.session_ref, 'userdata'):
             userdata = self.session_ref.userdata

@@ -9,19 +9,24 @@ import os
 import time
 from typing import Dict, Any, Optional, Type, Union
 from enum import Enum
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(".env.local")
+load_dotenv()
 
 from livekit import agents, api, rtc
 from livekit.agents import JobContext, WorkerOptions, cli, get_job_context
 from livekit.agents.voice import AgentSession
 
-from ..agents.base_agent import (
+from agents.base_agent import (
     BaseAgent, AgentConfig, SessionUserData, ConversationTracker,
     ConfigLoader, create_agent_config
 )
-from ..agents.primary_agent import PrimaryAgent
-from ..agents.specialist_agent import TechnicalAgent, BillingAgent, SalesAgent
-from ..tasks.consent_task import ConsentCollectionTask, DataCollectionConsentTask
-from ..tasks.information_task import ContactInfoCollectionTask, CallPurposeTask
+from agents.primary_agent import PrimaryAgent
+from agents.specialist_agent import TechnicalAgent, BillingAgent, SalesAgent
+from tasks.consent_task import ConsentCollectionTask, DataCollectionConsentTask
+from tasks.information_task import ContactInfoCollectionTask, CallPurposeTask
 
 logger = logging.getLogger("workflow-orchestrator")
 
@@ -83,7 +88,8 @@ class WorkflowOrchestrator:
                 # Add transcription if configured
                 input_audio_transcription=InputAudioTranscription(
                     model="whisper-1",
-                    language="sv" if language.lower() in ["svenska", "swedish"] else "en"
+                    language="sv" if language.lower() in ["svenska", "swedish"] else "en",
+                    prompt="Naturlig svensk konversation med professionell telefonassistent Robert" if language.lower() in ["svenska", "swedish"] else "Natural conversation with professional phone assistant"
                 ) if self.config.get("integrations", {}).get("telephony", {}).get("transcription", True) else None
             ),
             userdata=SessionUserData()
@@ -147,6 +153,10 @@ class WorkflowOrchestrator:
 
         # Create new agent
         new_agent = target_agent_class(config=new_config, chat_ctx=chat_ctx)
+
+        # Set custom prompt if available in config (for primary agents)
+        if target_agent_name == "PrimaryAgent" and "prompt" in self.config:
+            new_agent.custom_prompt = self.config["prompt"]
         new_agent.set_session_refs(self.session, self.context, self.tracker)
 
         # Update session
@@ -184,6 +194,11 @@ class WorkflowOrchestrator:
         # Create primary agent
         primary_config = create_agent_config(self.config, "primary")
         self.current_agent = PrimaryAgent(config=primary_config)
+
+        # Set custom prompt if available in config
+        if "prompt" in self.config:
+            self.current_agent.custom_prompt = self.config["prompt"]
+
         self.current_agent.set_session_refs(self.session, self.context, self.tracker)
 
         # Start session
@@ -203,6 +218,11 @@ class WorkflowOrchestrator:
         # Create primary agent for task coordination
         primary_config = create_agent_config(self.config, "primary")
         self.current_agent = PrimaryAgent(config=primary_config)
+
+        # Set custom prompt if available in config
+        if "prompt" in self.config:
+            self.current_agent.custom_prompt = self.config["prompt"]
+
         self.current_agent.set_session_refs(self.session, self.context, self.tracker)
 
         await self.session.start(room=self.context.room, agent=self.current_agent)
@@ -356,5 +376,4 @@ async def entrypoint(ctx: JobContext):
     await orchestrator.run_workflow(ctx)
 
 
-if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+# Entry point removed - only use lk agent deploy
