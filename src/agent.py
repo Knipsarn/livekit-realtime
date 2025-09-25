@@ -393,9 +393,9 @@ async def entrypoint(ctx: JobContext):
 
     # Extract caller phone number from room participants
     caller_phone = None
-    for participant in ctx.room.remote_participants:
-        if participant.identity.startswith("sip_"):
-            caller_phone = participant.identity.replace("sip_", "")
+    for identity, participant in ctx.room.remote_participants.items():
+        if identity.startswith("sip_"):
+            caller_phone = identity.replace("sip_", "")
             logger.info(f"Extracted caller phone: {caller_phone}")
             break
 
