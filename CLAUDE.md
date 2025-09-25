@@ -2,82 +2,141 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Overview
+
+This is a **production-ready LiveKit voice agent** designed for errand handling and missed call management. The agent uses OpenAI's Realtime API for natural Swedish conversations with memory persistence.
+
 ## Deployment and Testing
 
 **CRITICAL: NEVER run local development commands. Only use LiveKit deployment:**
 - Deploy agent: `lk agent deploy`
 - Test agent: Use the deployed agent URL from LiveKit Cloud
-- Configuration: All agent config is in `config/agent.creation.md` (NOT environment variables)
+- Configuration: All agent config is in `config/agent.creation.md`
 
-## Project Structure
+## Current Project Structure (Cleaned MVP)
 
-This is a LiveKit Agent Template System for building sophisticated AI voice agents. The current implementation focuses on Robert's missed call agent with memory capabilities.
+```
+livekit-realtime/
+├── src/
+│   └── agent.py              # Main agent with memory system (CallMemory class)
+├── config/
+│   └── agent.creation.md     # Active configuration file loaded by agent
+├── assets/
+│   └── greetings/           # Audio greeting files (optional)
+├── .env                     # Environment variables (OPENAI_API_KEY)
+├── .env.example            # Environment template
+├── requirements.txt        # Python dependencies
+├── Dockerfile             # Container for deployment
+├── livekit.toml          # LiveKit configuration
+├── pyproject.toml        # Python project config
+├── Makefile             # Build commands
+├── README.md           # Technical setup guide
+├── README_FOR_AI.md   # AI coder documentation
+└── CLAUDE.md         # This file
+```
 
-### Core Architecture
+## Core Architecture
 
-**Current Active Agent:**
-- `src/agent.py` - Main agent with memory system (CallMemory class)
-- `config/agent.creation.md` - Active configuration file loaded by agent
-- `robert-agent-config.md` - Source configuration (copied to config/)
+### Active Agent Implementation
+- `src/agent.py` - Single-file agent with integrated memory system
+- `CallMemory` class tracks caller information persistently
+- Function tools: `save_caller_info()`, `check_caller_memory()`, `save_call_details()`
+- Safety features: 10-minute max duration, 30-second inactivity timeout
 
-**Advanced Workflow System (Available but not currently used):**
-- `src/workflows/main_workflow.py` - Orchestrates multi-agent workflows
-- `src/agents/` - Base agent classes and specialist agents
-- `src/tasks/` - Structured data collection tasks
-
-### Workflow Types
-- **Single Agent**: Simple conversational agent (currently used)
-- **Multi-Agent**: Specialist handoffs (Technical, Billing, Sales)
-- **Task-Based**: Structured data collection workflows
-- **Hybrid**: Combined task and multi-agent workflows
-
-## Configuration Management
-
-Agent configuration is YAML-based in `config/agent.creation.md`:
+### Configuration System
+Agent configuration in `config/agent.creation.md`:
 ```yaml
 language: "Svenska"
 voice: "marin"
-workflow_type: "hybrid"
 personality_traits: "calm, professional, conversational, human-like"
 prompt: |
-  [Detailed Swedish conversational prompt for missed calls]
+  [Detailed conversational prompt for missed calls]
 ```
 
-## Key Features of Current Agent
+## Key Features
 
-**Memory System:**
-- `CallMemory` class tracks caller information persistently
-- Function tools: `save_caller_info()`, `get_collected_info()`, `add_call_details()`
+### Memory System
+- Tracks: name, phone, email, purpose, urgency, details
 - Prevents re-asking for information already provided
+- Accessible via function tools during conversation
 
-**Audio Configuration:**
-- Uses OpenAI Realtime model with "marin" voice
-- Transcription disabled to prevent audio artifacts
-- Swedish language optimized
+### Audio Configuration
+- Uses OpenAI Realtime model (`gpt-realtime`)
+- Voice options: "marin", "cedar", "shimmer", etc.
+- Temperature: 0.9 for natural conversation
+
+### Safety Features
+- Maximum call duration: 10 minutes
+- Inactivity timeout: 30 seconds
+- Graceful termination with Swedish farewell
 
 ## Important Development Rules
 
-1. **No Local Dev Execution**: All `if __name__ == "__main__"` blocks removed
-2. **Deploy-Only Testing**: Use `lk agent deploy` exclusively
-3. **Config-Driven**: Agent behavior controlled via config files, not code
-4. **Memory-First**: Always implement memory tools to prevent information loss
-5. **Swedish Focus**: Current agent optimized for Swedish missed call handling
+1. **No Local Dev Execution**: All testing via `lk agent deploy`
+2. **Config-Driven Behavior**: Modify `config/agent.creation.md` for changes
+3. **Memory-First Design**: Always preserve caller information
+4. **Swedish Language Focus**: Default prompts optimized for Swedish
 
-## Agent Creation System
+## Agent Type: Errand Handler
 
-The repository includes a template generation system:
-- `scripts/create_agent.py` - Generate new agents from templates
-- `make create-agent` - Interactive agent creation
-- `make demo` - Quick demo agent creation
+This agent is designed for:
+- **Missed call handling**: Collecting information when owner unavailable
+- **Lead qualification**: Determining callback priority
+- **Message taking**: Recording detailed caller information
 
-## Dependencies
+NOT designed for:
+- Sales conversations
+- Technical support
+- Direct problem solving
+- Appointment booking (without human confirmation)
 
-Core requirements in `requirements.txt`:
-- `livekit-agents[openai]~=1.2` - LiveKit framework with OpenAI integration
-- `python-dotenv~=1.0` - Environment variable management
-- `pyyaml~=6.0` - YAML configuration parsing
-- `aiohttp~=3.9` - HTTP client for webhooks
+## Common Tasks
 
-## Current Branch Context
+### Modify Agent Behavior
+1. Edit `config/agent.creation.md`
+2. Update the `prompt` section
+3. Deploy: `lk agent deploy`
 
-Working on `robert-demo` branch with deployed agent ID `CA_oq5bG2Q5XRym` for Robert's missed call handling. The agent uses advanced memory capabilities to remember caller information throughout conversations and provides natural Swedish language interaction.
+### Add New Memory Fields
+1. Edit `CallMemory` class in `src/agent.py`
+2. Update `save_caller_info()` function tool
+3. Deploy changes
+
+### Change Language/Voice
+1. Edit `config/agent.creation.md`
+2. Set `language` and `voice` fields
+3. Update `prompt` to match language
+4. Deploy changes
+
+## Testing Checklist
+
+When testing changes, verify:
+- [ ] Agent introduces itself correctly
+- [ ] Collects information without being pushy
+- [ ] Remembers provided information
+- [ ] Ends call after 1-2 clarifying questions
+- [ ] Handles silence/inactivity properly
+- [ ] Says goodbye before ending call
+
+## Webhook Integration
+
+Optional webhook configuration in `.env`:
+```bash
+WEBHOOK_URL=https://your-endpoint.com/webhook
+```
+
+Payload includes full conversation transcript and extracted caller information.
+
+## Current Deployment
+
+- Branch: `template-system`
+- Agent ID: `CA_oq5bG2Q5XRym`
+- Purpose: Robert's Swedish missed call handler
+- Status: MVP - Production Ready
+
+## Important Notes
+
+- Always test via LiveKit Cloud Playground
+- Configuration changes require redeployment
+- Memory system is per-call (not persistent across calls)
+- Webhook fires after call completion

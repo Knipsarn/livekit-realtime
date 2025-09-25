@@ -22,8 +22,8 @@ logger = logging.getLogger("robert-agent")
 
 
 def load_config():
-    """Load configuration from robert-agent-config.md"""
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "robert-agent-config.md")
+    """Load configuration from config/agent.creation.md"""
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "agent.creation.md")
 
     try:
         with open(config_path, 'r', encoding='utf-8') as file:
