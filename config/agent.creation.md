@@ -1,219 +1,154 @@
-# 🤖 Agent Creation Template
-# This file contains all configurable variables for creating LiveKit voice agents
-# Replace all {{VARIABLE}} placeholders with your specific values
+# LiveKit Voice Agent Configuration Template
 
-# === AGENT IDENTITY ===
-title: "{{AGENT_TITLE}}"
-description: "{{AGENT_DESCRIPTION}}"
+# === BASIC AGENT IDENTITY ===
+language: "{{LANGUAGE}}"                          # "Svenska", "English", "Español", "Français"
+voice: "{{VOICE}}"                                # "marin", "cedar", "shimmer", "nova", "alloy"
+workflow_type: "single_agent"                     # Keep simple for now
+personality_traits: "{{PERSONALITY_TRAITS}}"      # "calm, professional, conversational, human-like"
 
-# Primary agent configuration
-agent_name: "{{AGENT_NAME}}"                     # e.g., "Jim", "Elsa", "Alex", "CustomerService"
-owner_name: "{{OWNER_NAME}}"                     # e.g., "Samuel", "Acme Corp", "Healthcare Clinic"
-language: "{{LANGUAGE}}"                         # e.g., "Svenska", "English", "Español"
-voice: "{{VOICE}}"                              # e.g., "cedar", "nova", "marin", "alloy"
-
-# === WORKFLOW CONFIGURATION ===
-workflow_type: "{{WORKFLOW_TYPE}}"               # single_agent, multi_agent, task_based, hybrid
-
-# Complexity and features
-complexity_level: "{{COMPLEXITY}}"               # simple, intermediate, advanced, enterprise
-use_workflows: {{USE_WORKFLOWS}}                 # true/false - Enable multi-agent workflows
-use_tasks: {{USE_TASKS}}                         # true/false - Enable structured tasks
-state_management: {{STATE_MANAGEMENT}}           # true/false - Track conversation state
-
-# === BUSINESS CONTEXT ===
-business_type: "{{BUSINESS_TYPE}}"               # personal, consulting, retail, healthcare, finance, legal
-industry: "{{INDUSTRY}}"                        # technology, healthcare, finance, real_estate, other
-use_case: "{{USE_CASE}}"                        # missed_calls, customer_support, sales, scheduling, triage
-
-# Primary purpose and behavior
-call_purpose: "{{CALL_PURPOSE}}"                # e.g., "missed call assistant", "customer support", "appointment booking"
-personality_traits: "{{PERSONALITY}}"           # e.g., "friendly, professional, concise", "warm, empathetic, patient"
-conversation_style: "{{STYLE}}"                 # formal, casual, consultative, medical, legal
-response_length: "{{RESPONSE_LENGTH}}"          # short, medium, detailed
-
-# === GREETING CONFIGURATION ===
+# === GREETING MESSAGE ===
 first_message: >
   {{FIRST_MESSAGE}}
 
-# Audio settings
-use_prerecorded_greeting: {{USE_AUDIO}}          # true/false
-audio_voice: "{{AUDIO_VOICE}}"                  # Voice for TTS generation (same as voice or different)
-greeting_tone: "{{GREETING_TONE}}"              # professional, friendly, warm, energetic
+use_prerecorded_greeting: false
 
-# === WORKFLOW AGENTS ===
+# === AGENT CONFIGURATION (Simplified) ===
 agents:
   primary:
-    enabled: true
-    name: "{{PRIMARY_AGENT_NAME}}"               # Main agent class name
-    personality: "{{PRIMARY_PERSONALITY}}"       # Specific traits for primary agent
-    specialization: "{{PRIMARY_SPEC}}"           # e.g., "general_support", "intake", "triage"
-    voice: "{{PRIMARY_VOICE}}"                  # Voice for primary agent
+    name: "{{AGENT_CLASS_NAME}}"                  # e.g., "ReceptionistAgent", "MissedCallAgent"
+    personality: "{{PERSONALITY_TRAITS}}"
+    specialization: "{{SPECIALIZATION}}"          # e.g., "call_intake_and_routing", "errand_handling"
+    voice: "{{VOICE}}"
 
-  secondary:
-    enabled: {{SECONDARY_ENABLED}}               # true/false
-    name: "{{SECONDARY_AGENT_NAME}}"             # e.g., "TechnicalSupport", "BillingAgent"
-    personality: "{{SECONDARY_PERSONALITY}}"     # Traits for secondary agent
-    specialization: "{{SECONDARY_SPEC}}"         # e.g., "technical_issues", "billing_inquiries"
-    voice: "{{SECONDARY_VOICE}}"                # Voice for secondary agent
-
-  escalation:
-    enabled: {{ESCALATION_ENABLED}}              # true/false
-    name: "{{ESCALATION_AGENT_NAME}}"            # e.g., "Manager", "SpecialistSupervisor"
-    personality: "{{ESCALATION_PERSONALITY}}"    # Traits for escalation agent
-    specialization: "{{ESCALATION_SPEC}}"        # e.g., "complex_issues", "complaints"
-    voice: "{{ESCALATION_VOICE}}"               # Voice for escalation agent
-
-# === WORKFLOW RULES ===
+# === BASIC WORKFLOW (Keep Simple) ===
 workflow:
-  handoff_triggers: "{{HANDOFF_RULES}}"          # keyword_based, intent_based, tool_based, manual
-  context_preservation: {{PRESERVE_CONTEXT}}     # true/false - Maintain chat history across agents
-  state_tracking: {{TRACK_STATE}}                # true/false - Track custom state data
-  max_handoffs: {{MAX_HANDOFFS}}                 # Maximum number of agent handoffs per call
+  context_preservation: true
+  max_handoffs: 1                                 # Single agent = no handoffs
 
-  # Handoff conditions
-  handoff_keywords: "{{HANDOFF_KEYWORDS}}"       # e.g., "technical,billing,manager,escalate"
-  auto_escalation: {{AUTO_ESCALATION}}           # true/false - Auto escalate on keywords
-
-# === TASK CONFIGURATION ===
+# === INFORMATION GATHERING (Core Feature) ===
 tasks:
   consent_collection:
-    enabled: {{CONSENT_ENABLED}}                 # true/false
-    required: {{CONSENT_REQUIRED}}               # true/false - Block call if declined
-    message: "{{CONSENT_MESSAGE}}"               # Custom consent request message
-
+    enabled: false                                # Usually not needed for missed calls
+    required: false
   information_gathering:
-    enabled: {{INFO_GATHERING_ENABLED}}          # true/false
-    required_fields: "{{REQUIRED_FIELDS}}"       # name,email,phone,purpose,company
-    optional_fields: "{{OPTIONAL_FIELDS}}"       # address,notes,callback_time
-    validation_strict: {{STRICT_VALIDATION}}     # true/false
+    enabled: true
+    required_fields: "name,phone"                 # Essential fields
 
-  appointment_scheduling:
-    enabled: {{SCHEDULING_ENABLED}}              # true/false
-    auto_suggest_times: {{AUTO_SUGGEST}}         # true/false
-    buffer_minutes: {{BUFFER_MINUTES}}           # Minutes between appointments
-
-  note_taking:
-    enabled: {{NOTE_TAKING_ENABLED}}             # true/false
-    auto_summarize: {{AUTO_SUMMARIZE}}           # true/false
-    urgency_detection: {{URGENCY_DETECTION}}     # true/false
-
-# === INTEGRATION CONFIGURATION ===
+# === INTEGRATIONS ===
 integrations:
-  calendar:
-    enabled: {{CALENDAR_ENABLED}}                # true/false
-    provider: "{{CALENDAR_PROVIDER}}"            # google, outlook, caldav, custom
-    timezone: "{{TIMEZONE}}"                     # e.g., "Europe/Stockholm", "America/New_York"
-
-  crm:
-    enabled: {{CRM_ENABLED}}                     # true/false
-    provider: "{{CRM_PROVIDER}}"                 # salesforce, hubspot, pipedrive, custom
-    auto_create_contacts: {{AUTO_CREATE_CRM}}    # true/false
-
   webhook:
-    enabled: {{WEBHOOK_ENABLED}}                 # true/false
-    url: "{{WEBHOOK_URL}}"                       # Webhook endpoint URL
-    events: "{{WEBHOOK_EVENTS}}"                 # call_start,call_end,booking,note
-    auth_header: "{{WEBHOOK_AUTH}}"              # Authorization header
-
+    enabled: false                                # Set to true if you want call data
   telephony:
-    provider: "{{TELEPHONY_PROVIDER}}"           # telnyx, twilio, livekit
-    recording: {{RECORDING_ENABLED}}             # true/false
-    transcription: {{TRANSCRIPTION_ENABLED}}     # true/false
+    transcription: true
 
-  email:
-    enabled: {{EMAIL_ENABLED}}                   # true/false
-    provider: "{{EMAIL_PROVIDER}}"               # smtp, sendgrid, mailgun
-    auto_send_summaries: {{AUTO_EMAIL}}          # true/false
-
-# === CUSTOM TOOLS ===
-tools:
-  - name: "{{TOOL_1_NAME}}"                      # e.g., "calendar_booking"
-    enabled: {{TOOL_1_ENABLED}}                  # true/false
-    type: "{{TOOL_1_TYPE}}"                      # booking, logging, transfer, search, custom
-    description: "{{TOOL_1_DESCRIPTION}}"        # Tool description for LLM
-    parameters: "{{TOOL_1_PARAMS}}"              # Required parameters
-
-  - name: "{{TOOL_2_NAME}}"                      # e.g., "log_note"
-    enabled: {{TOOL_2_ENABLED}}                  # true/false
-    type: "{{TOOL_2_TYPE}}"                      # booking, logging, transfer, search, custom
-    description: "{{TOOL_2_DESCRIPTION}}"        # Tool description for LLM
-    parameters: "{{TOOL_2_PARAMS}}"              # Required parameters
-
-  - name: "{{TOOL_3_NAME}}"                      # e.g., "transfer_to_human"
-    enabled: {{TOOL_3_ENABLED}}                  # true/false
-    type: "{{TOOL_3_TYPE}}"                      # booking, logging, transfer, search, custom
-    description: "{{TOOL_3_DESCRIPTION}}"        # Tool description for LLM
-    parameters: "{{TOOL_3_PARAMS}}"              # Required parameters
-
-# === ADVANCED CONFIGURATION ===
+# === OPENAI REALTIME CONFIGURATION ===
 advanced:
-  # Model settings
   model_overrides:
-    primary_model: "{{PRIMARY_MODEL}}"           # gpt-realtime, gpt-4o-realtime-preview
-    fallback_model: "{{FALLBACK_MODEL}}"         # Fallback if primary fails
-    temperature: {{LLM_TEMPERATURE}}             # 0.1-1.0
-    max_tokens: {{MAX_TOKENS}}                   # Maximum response tokens
+    primary_model: "gpt-realtime"                 # OpenAI Realtime API
+    temperature: {{TEMPERATURE}}                  # 0.7-0.9 for natural conversation
 
-  # Voice and audio settings
-  voice_settings:
-    vad_threshold: {{VAD_THRESHOLD}}             # Voice activity detection threshold (0.1-1.0)
-    vad_prefix_ms: {{VAD_PREFIX_MS}}             # Milliseconds before speech
-    vad_silence_ms: {{VAD_SILENCE_MS}}           # Silence timeout in milliseconds
-
-  audio:
-    sample_rate: {{SAMPLE_RATE}}                 # Audio sample rate (16000, 24000, 48000)
-    use_prerecorded: {{USE_PRERECORDED}}         # true/false
-    audio_quality: "{{AUDIO_QUALITY}}"           # standard, hd
-    enable_interruption: {{ENABLE_INTERRUPTION}} # true/false
-
-  # Security and compliance
-  security:
-    enable_consent_tracking: {{CONSENT_TRACKING}} # true/false
-    data_retention_days: {{DATA_RETENTION}}      # Days to retain conversation data
-    pii_detection: {{PII_DETECTION}}             # true/false
-    compliance_mode: "{{COMPLIANCE}}"            # none, gdpr, hipaa, sox
-
-  # Performance tuning
-  performance:
-    max_call_duration: {{MAX_DURATION}}          # Maximum call duration in seconds
-    response_timeout: {{RESPONSE_TIMEOUT}}       # Response timeout in seconds
-    retry_attempts: {{RETRY_ATTEMPTS}}           # Number of retry attempts
-    enable_caching: {{ENABLE_CACHING}}           # true/false
-
-# === PROMPT CONFIGURATION ===
+# === MAIN PROMPT - The Heart of Your Agent ===
 prompt: |
-  {{MAIN_PROMPT}}
+  {{MAIN_SYSTEM_PROMPT}}
 
-# === CONVERSATION EXAMPLES ===
-examples:
-  example_1:
-    title: "{{EXAMPLE_1_TITLE}}"
-    scenario: "{{EXAMPLE_1_SCENARIO}}"
-    conversation: |
-      {{EXAMPLE_1_CONVERSATION}}
+# === PROMPT ENGINEERING EXAMPLES ===
+# Use these as templates for different agent types:
 
-  example_2:
-    title: "{{EXAMPLE_2_TITLE}}"
-    scenario: "{{EXAMPLE_2_SCENARIO}}"
-    conversation: |
-      {{EXAMPLE_2_CONVERSATION}}
+# MISSED CALL AGENT TEMPLATE:
+# Du är [OWNER]'s personliga assistent som svarar på HANS MISSADE SAMTAL.
+#
+# DITT HUVUDMÅL:
+# - Samla in tillräckligt med information för att [OWNER] ska förstå vad personen ringer om
+# - När du har förstått ärendet, AVSLUTA genom att säga att du ska meddela [OWNER]
+# - FÖRSÖK INTE hjälpa eller lösa problem själv - du samlar bara information
+#
+# KRITISKT VIKTIGT:
+# - [OWNER] är INTE tillgänglig - du kan ALDRIG koppla till honom
+# - Du hanterar [OWNER]s missade samtal när han inte kan svara
+# - ALDRIG erbjud att "koppla till [OWNER]" eller "låta [OWNER] ringa tillbaka"
+# - Ditt jobb är att SAMLA INFORMATION, inte att hjälpa
+#
+# VIKTIGAST - VAR MÄNSKLIG:
+# - LYSSNA först på vad personen säger och svara på DET
+# - Ha en riktig konversation - ingen robot-script
+# - Låt samtalet flyta naturligt baserat på vad som sägs
+# - Bara få namn och kontaktinfo när det känns naturligt i samtalet
+# - !ALDRIG säga "jag förstår" eller "jag hör vad du säger" - det låter falskt!
+#
+# SAMTALSPROCESS:
+# 1. Lyssna på vad personen säger
+# 2. Ställ 1-2 klargörande frågor för att förstå ärendet
+# 3. När du har tillräckligt information, AVSLUTA:
+#    - "Okej, då ska jag meddela [OWNER] att [sammanfatta ärendet kort]"
+#    - "Bra, jag ska berätta för [OWNER] om [vad de vill]"
+# 4. FÖRSÖK INTE hjälpa mer efter detta
+#
+# SAMTALSREGLER:
+# - Reagera äkta på vad personen berättar
+# - GÖR INGA ANTAGANDEN - lyssna på vad de faktiskt säger
+# - Ställ enkla, öppna frågor först: "Vad gäller det?" "Vad har hänt?"
+# - När du förstått ärendet, AVSLUTA - ställ inte fler frågor
+# - När personen förklarar sitt problem, fråga naturligt efter namn: "Vad heter du förresten?"
+# - Om de säger sitt namn när som helst, bekräfta det: "Okej [namn], ..."
+#
+# FÖRBJUDET:
+# - Försöka hjälpa eller ge råd
+# - Ställa fler frågor efter du förstått ärendet
+# - Robotfraser som "jag förstår", "jag hör", "låt mig hjälpa dig"
+# - Automatiskt fråga efter namn direkt
+# - Följa samma script varje gång
+# - Ignorera vad personen säger för att följa en mall
+# - Erbjuda att koppla till [OWNER] eller att [OWNER] ringer tillbaka
+# - GÖR ANTAGANDEN om vad personen vill (byta, köpa, ändra, etc.)
+#
+# EXEMPEL på rätt hantering:
+# Person: "Jag ringde [OWNER] om att han hade några hemförsäkringar åt mig"
+# Agent: "Okej, vad var det med hemförsäkringarna?"
+# Person: "Han skulle visa mig några alternativ"
+# Agent: "Bra, då ska jag meddela [OWNER] att du vill titta på de hemförsäkringsalternativ han har åt dig. Vad heter du förresten?"
+# Person: "Anna Svensson"
+# Agent: "Tack Anna, jag ska se till att [OWNER] får veta detta."
+# [AVSLUTA HÄR - fråga inte mer]
+#
+# VIKTIG PÅMINNELSE: Ditt jobb är att SAMLA INFORMATION för [OWNER], inte att hjälpa personen själv.
 
-# === DEPLOYMENT CONFIGURATION ===
-deployment:
-  environment: "{{ENVIRONMENT}}"                 # development, staging, production
-  region: "{{DEPLOYMENT_REGION}}"               # us-east-1, eu-west-1, ap-southeast-1
-  scaling: "{{SCALING_MODE}}"                    # manual, auto, serverless
-  monitoring: {{ENABLE_MONITORING}}             # true/false
-
-# === TESTING CONFIGURATION ===
-testing:
-  enable_test_suite: {{ENABLE_TESTING}}         # true/false
-  test_scenarios: "{{TEST_SCENARIOS}}"          # basic, comprehensive, stress
-  mock_integrations: {{MOCK_INTEGRATIONS}}      # true/false for testing
-
-# === DOCUMENTATION ===
-documentation:
-  generate_readme: {{GENERATE_README}}          # true/false
-  include_examples: {{INCLUDE_EXAMPLES}}        # true/false
-  api_documentation: {{API_DOCS}}               # true/false
+# CUSTOMER SERVICE AGENT TEMPLATE:
+# You are a professional customer service agent for [COMPANY_NAME].
+#
+# YOUR MAIN GOAL:
+# - Help customers with their questions and concerns
+# - If you can't resolve something, collect information for human follow-up
+# - Always be helpful but know your limitations
+#
+# CONVERSATION STYLE:
+# - Professional but friendly
+# - Ask ONE question at a time
+# - Listen carefully to what the customer actually says
+# - Don't assume what they want - let them explain
+# - Use natural conversation, not robotic scripts
+#
+# WHAT YOU CAN DO:
+# - Answer general questions about [COMPANY/PRODUCTS]
+# - Help with basic account issues
+# - Schedule callbacks or appointments
+# - Collect customer feedback
+#
+# WHAT TO ESCALATE:
+# - Complex technical issues
+# - Billing disputes
+# - Refund requests
+# - Complaints requiring manager attention
+#
+# CONVERSATION FLOW:
+# 1. Greet warmly and ask how you can help
+# 2. Listen to their issue completely
+# 3. Ask clarifying questions if needed (max 2-3)
+# 4. Either help directly OR collect info for human follow-up
+# 5. Confirm next steps clearly
+#
+# FORBIDDEN:
+# - Making promises you can't keep
+# - Giving incorrect information
+# - Being pushy or sales-focused
+# - Using phrases like "I understand your frustration" (sounds fake)
+# - Asking too many questions in a row
