@@ -1,2 +1,12 @@
+[project]
+name = "snm"
+subdomain = "snm-zzc8jbxg"
+
+[build]
+entrypoint = "src/agent.py"
+requirements = "requirements.txt"
+
 [agent]
-entrypoint = "src.agent:entrypoint"
+id = "CA_rkcom7qcDBhn"
+name = "Robert Voice Agent"
+type = "voice"

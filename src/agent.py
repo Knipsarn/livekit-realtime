@@ -343,7 +343,12 @@ async def entrypoint(ctx: JobContext):
             model=model_config.get("primary_model", "gpt-realtime"),
             voice=voice_name,
             modalities=["audio", "text"],
-            temperature=model_config.get("temperature", 0.7)
+            temperature=model_config.get("temperature", 0.7),
+            input_audio_transcription=InputAudioTranscription(
+                model="whisper-1",
+                language="sv",  # Swedish language
+                prompt="Svenska konversation med AI-assistent Robert"
+            )
         )
     )
 

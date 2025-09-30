@@ -70,6 +70,22 @@ prompt: |
 - Inactivity timeout: 30 seconds
 - Graceful termination with Swedish farewell
 
+## CRITICAL: LiveKit Cloud Management
+
+**IMPORTANT: ALL agent management MUST be done via CLI - NOT possible in web dashboard!**
+- Creating agents: Use `lk agent deploy`
+- Deleting agents: Use `lk agent delete --id <agent_id>`
+- Updating agents: Deploy new version via CLI
+- **The LiveKit Cloud web dashboard CANNOT create, delete, or update agents**
+- **This applies to ALL plans including Ship/Enterprise**
+
+**ABSOLUTELY CRITICAL: The LiveKit CLI is INTERACTIVE and CANNOT be automated!**
+- **NEVER attempt to run LiveKit CLI commands automatically**
+- **The CLI uses special terminal controls that CANNOT receive automated input**
+- **User MUST manually run these commands and respond to prompts**
+- **DO NOT try to pipe input, use echo, use subprocess, or any automation**
+- **This has been confirmed multiple times - IT IS IMPOSSIBLE TO AUTOMATE**
+
 ## Important Development Rules
 
 1. **No Local Dev Execution**: All testing via `lk agent deploy`
@@ -133,6 +149,56 @@ Payload includes full conversation transcript and extracted caller information.
 - Agent ID: `CA_oq5bG2Q5XRym`
 - Purpose: Robert's Swedish missed call handler
 - Status: MVP - Production Ready
+
+## Debugging History & Solutions
+
+### Issue 1: "project does not match agent subdomain []" Error
+**Symptoms:** `lk agent create` fails with empty subdomain error
+**Root Cause:** Missing `subdomain` field in `livekit.toml` or wrong project name
+**Solution:**
+```toml
+[project]
+name = "snm"  # Must match LiveKit project name
+subdomain = "snm-zzc8jbxg"  # Full subdomain from wss://snm-zzc8jbxg.livekit.cloud
+```
+
+### Issue 2: "package livekit-agents version is too old" Error
+**Symptoms:** Agent creation fails with version error
+**Root Cause:** Outdated package versions in `requirements.txt`
+**Solution:**
+```txt
+livekit-agents>=1.2.0  # Update from >=0.11.0
+livekit-plugins-openai>=1.2.0  # Update from >=0.9.0
+```
+
+### Issue 3: "open examples\python.pip.Dockerfile: file does not exist"
+**Symptoms:** Windows path error when creating agent
+**Root Cause:** LiveKit CLI on Windows uses backslash `\` but file system uses forward slash `/`
+**Solution:** Copy Dockerfile to root directory as workaround
+```bash
+cp examples/python.pip.Dockerfile Dockerfile
+```
+
+### Issue 4: Agent Picks Up But No Audio
+**Symptoms:** Call connects, agent session starts, but caller hears silence
+**Root Cause:** Missing Swedish `InputAudioTranscription` configuration
+**Solution:** Add to RealtimeModel initialization:
+```python
+input_audio_transcription=InputAudioTranscription(
+    model="whisper-1",
+    language="sv",  # Swedish language
+    prompt="Svenska konversation med AI-assistent Robert"
+)
+```
+
+### Issue 5: Multiple Conflicting Agents
+**Symptoms:** Broken agent intercepts calls, working agent never gets them
+**Root Cause:** Multiple agents deployed to same project
+**Solution:** Delete all agents before deploying new one:
+```bash
+lk agent list
+lk agent delete --id <agent_id>  # User must manually confirm
+```
 
 ## Important Notes
 

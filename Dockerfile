@@ -12,4 +12,4 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-CMD ["python", "src/agent.py"]
+CMD ["python", "src/agent.py", "start"]
