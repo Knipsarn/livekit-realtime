@@ -1,0 +1,10 @@
+# LiveKit core packages
+livekit-agents>=1.2.0
+livekit-plugins-openai>=1.2.0
+
+# Configuration and utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+
+# HTTP client for webhooks
+aiohttp>=3.9.0
